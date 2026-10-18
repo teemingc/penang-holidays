@@ -8,6 +8,10 @@
 	import { resolve } from '$app/paths';
 	import Request from '#lib/Request.svelte';
 	import flag from '#lib/assets/penang-flag.svg';
+	import dawn from '#lib/assets/bridge/dawn.webp';
+	import day from '#lib/assets/bridge/day.webp';
+	import dusk from '#lib/assets/bridge/dusk.webp';
+	import night from '#lib/assets/bridge/night.webp';
 	import { now, paletteAt, phaseOf, sunAt } from '#lib/sky.js';
 	import type { PageProps } from './$types';
 
@@ -24,6 +28,9 @@
 	const path = $derived(
 		resolve('/[year]/[month]', { year: String(data.year), month: String(data.month) })
 	);
+
+	// Whether the scene has drawn its first frame, to take the place of its snapshot
+	let ready = $state(false);
 
 	const rgb = ([r, g, b]: number[]) => `rgb(${Math.round(r!)} ${Math.round(g!)} ${Math.round(b!)})`;
 
@@ -56,8 +63,9 @@
 <div class="page">
 	<header>
 		<h1>
-			Every Penang <span class="last"
-				>holiday
+			<span class="words">Every Penang</span>
+			<span class="last"
+				><span class="words">holiday</span>
 				<!-- A little Penang flag, waving: vertical strips of it swing in perspective one after
 			     another, so a ripple runs from the hoist to the fly -->
 				<span class="flag" aria-hidden="true" style:--flag={`url("${flag}")`}>
@@ -77,8 +85,18 @@
 	<div class="scene">
 		<!-- three.js is most of the page's weight, so the scene loads after everything else -->
 		{#await import('#lib/Scene.svelte') then { default: Scene }}
-			<Scene reducedMotion={reducedMotion.current} />
+			<Scene reducedMotion={reducedMotion.current} onready={() => (ready = true)} />
 		{/await}
+		<!-- A still of the scene at each time of day, shown until three.js has loaded and drawn it -->
+		<div
+			class="still"
+			class:ready
+			aria-hidden="true"
+			style:--dawn={`url("${dawn}")`}
+			style:--day={`url("${day}")`}
+			style:--dusk={`url("${dusk}")`}
+			style:--night={`url("${night}")`}
+		></div>
 	</div>
 
 	<section class="request" aria-label="Try the API">
@@ -158,11 +176,17 @@
 		overflow: hidden;
 	}
 
-	/* In front of the sky: clouds, and anything flung up there, pass behind the words */
+	/* The header itself isn't lifted, so the bridge's canvas, which comes after it, is drawn
+	   over the flag: a car flung up there passes in front of it */
 	header {
+		grid-area: header;
+	}
+
+	/* The words are in front of the sky: clouds, and anything flung up there, pass behind them */
+	.words,
+	header p {
 		position: relative;
 		z-index: 1;
-		grid-area: header;
 	}
 
 	h1 {
@@ -191,6 +215,8 @@
 		margin: 0 0 0 0.22em;
 		perspective: 1.5em;
 		vertical-align: -0.02em;
+		/* A gust from a passing car leans it from the hoist; see Scene.svelte */
+		transform-origin: left center;
 	}
 
 	/* Everything here animates only transform and opacity, which the browser can do without
@@ -230,18 +256,10 @@
 		border-radius: 0 0.05em 0.05em 0;
 	}
 
-	/* Against a bright sky, a soft shadow lifts it off the page: drawn once, behind it */
-	.flag::before {
-		content: '';
-		position: absolute;
-		inset: 0.04em 0.02em -0.03em;
-		border-radius: 0.06em;
-		box-shadow: 0 0.05em 0.1em rgb(11 29 54 / 0.35);
-		opacity: 0;
-	}
-
-	:global(:root[data-sky='day']) .flag::before {
-		opacity: 1;
+	/* Against a bright sky, a soft shadow lifts it off the page: cast by the cloth as it is, so
+	   it waves with it. The filter is applied by the compositor, over the strips as they turn */
+	:global(:root[data-sky='day']) .flag {
+		filter: drop-shadow(0 0.05em 0.05em rgb(11 29 54 / 0.35));
 	}
 
 	@keyframes wave {
@@ -304,6 +322,40 @@
 		grid-area: scene;
 		min-height: 0;
 		margin: 0.5rem -2.5rem 0;
+		position: relative;
+	}
+
+	/* Framed as the scene is: its camera's field of view is set by the height, so the still is
+	   fitted to the height and cropped at the sides, which are feathered just as the scene's are */
+	.still {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: var(--night) center / auto 100% no-repeat;
+		mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+		transition: opacity 0.6s ease-out;
+	}
+
+	:global(:root[data-sky='dawn']) .still {
+		background-image: var(--dawn);
+	}
+
+	:global(:root[data-sky='day']) .still {
+		background-image: var(--day);
+	}
+
+	:global(:root[data-sky='dusk']) .still {
+		background-image: var(--dusk);
+	}
+
+	.still.ready {
+		opacity: 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.still {
+			transition: none;
+		}
 	}
 
 	/* Level with the bridge, and filling the rest of the column so the response has room

@@ -6,9 +6,11 @@
 
 	interface Props {
 		reducedMotion: boolean;
+		/** Called once the scene has drawn its first frame */
+		onready?: () => void;
 	}
 
-	let { reducedMotion }: Props = $props();
+	let { reducedMotion, onready }: Props = $props();
 
 	// The Penang Bridge across the strait, in metres, at the time of day it is in Penang. x runs
 	// east along the bridge, y is up from the sea, and z is south, towards the viewer
@@ -1309,50 +1311,156 @@
 
 		// The header is cloud: a car passing through it punches a hole, drags the cloud along in
 		// its direction of flight and leaves it in wisps, and it all drifts slowly back together.
-		// Two small maps of the disturbance drive a filter on the header: one in red and green
-		// for the way it was pushed, and one in greys for how badly it was torn. Greys come
-		// through a wide-gamut screen's colour conversion untouched, where a colour wouldn't:
-		// blue would pick up a little of the red and green, and the whole header would read as
-		// torn, faded and grey. The filter is only on while there's something to settle
+		// While it's disturbed, the header is drawn into a picture that's shown in its place on a
+		// canvas of its own, where a shader pushes it about by a small map of the disturbance:
+		// which way each bit of it was pushed, and how badly it was torn. An SVG filter on the
+		// header itself would be simpler, but Safari doesn't run one on a page's text, and every
+		// other browser redraws the whole thing on the processor each time the map changes
 		const header = document.querySelector('header');
 		const WAKE_SCALE = 0.25;
-		const wakeMap = document.createElement('canvas');
-		const wake = wakeMap.getContext('2d')!;
-		const tearMap = document.createElement('canvas');
-		const tearing = tearMap.getContext('2d')!;
-		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-		svg.setAttribute('aria-hidden', 'true');
-		svg.style.position = 'absolute';
-		svg.style.width = svg.style.height = '0';
-		svg.innerHTML = `<filter id="wake" x="-5%" y="-25%" width="110%" height="150%" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-			<feImage x="0" y="0" preserveAspectRatio="none" result="map" />
-			<feImage x="0" y="0" preserveAspectRatio="none" result="tear" />
-			<feDisplacementMap in="SourceGraphic" in2="map" scale="40" xChannelSelector="R" yChannelSelector="G" result="pushed" />
-			<feTurbulence type="fractalNoise" baseFrequency="0.03 0.08" numOctaves="3" seed="4" result="noise">
-			</feTurbulence>
-			<feDisplacementMap in="pushed" in2="noise" scale="22" xChannelSelector="R" yChannelSelector="G" result="wisps" />
-			<feGaussianBlur in="wisps" stdDeviation="2.5" result="smoke" />
-			<feColorMatrix in="tear" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0" result="torn" />
-			<feComposite in="smoke" in2="torn" operator="in" result="smoky" />
-			<feComposite in="pushed" in2="torn" operator="out" result="whole" />
-			<feMerge result="mixed"><feMergeNode in="smoky" /><feMergeNode in="whole" /></feMerge>
-			<feColorMatrix in="tear" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -0.85 0 0 0 1" result="left" />
-			<feComposite in="mixed" in2="left" operator="in" />
-		</filter>`;
-		document.body.append(svg);
-		const [wakeImage, tearImage] = svg.querySelectorAll('feImage');
 		let headerBox = { x: 0, y: 0, w: 0, h: 0 };
 		// The disturbance, per cell of the map: which way it was pushed, and how torn it is
 		let pushX = new Float32Array(0);
 		let pushY = new Float32Array(0);
 		let torn = new Float32Array(0);
 		let spare = new Float32Array(0);
-		let pixels: ImageData | null = null;
-		let tearPixels: ImageData | null = null;
+		let W = 0;
+		let H = 0;
 		let stirred = -Infinity;
+		// The little flag in the header is cloth, not cloud: a car flying close by doesn't tear it,
+		// but its gust sets the flag flapping hard and leaning away from it, and it settles back
+		const flag = header?.querySelector<HTMLElement>('.flag') ?? null;
+		// Its middle, in the header's coordinates, and its width
+		let flagBox = { x: 0, y: 0, w: 0 };
+
+		// The canvas the smoke is drawn on: over the header and a margin around it, for anything
+		// pushed or blown out past its edges
+		const overlay = document.createElement('canvas');
+		overlay.setAttribute('aria-hidden', 'true');
+		Object.assign(overlay.style, {
+			position: 'absolute',
+			zIndex: '1',
+			pointerEvents: 'none',
+			display: 'none'
+		});
+		document.body.append(overlay);
+		const smoke = new THREE.WebGLRenderer({ canvas: overlay, alpha: true, antialias: false });
+		smoke.setClearColor(0x000000, 0);
+		// The header as it looks, drawn into a canvas of its own
+		const picture = document.createElement('canvas');
+		const drawing = picture.getContext('2d')!;
+		const pictured = new THREE.CanvasTexture(picture);
+		pictured.premultiplyAlpha = true;
+		pictured.generateMipmaps = false;
+		pictured.minFilter = THREE.LinearFilter;
+		// The disturbance, red and green for the push and blue for the tear
+		let wake = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+		const SMOKE_VERTEX = /* glsl */ `
+			varying vec2 vUv;
+			void main() {
+				vUv = uv;
+				gl_Position = vec4(position.xy, 0.0, 1.0);
+			}
+		`;
+		// Just as the SVG filter it replaces: the header pushed by the map, and where it's torn,
+		// that pushed again by noise into wisps and blurred into smoke, then thinned out
+		const SMOKE_FRAGMENT = /* glsl */ `
+			precision highp float;
+			uniform sampler2D picture;
+			uniform sampler2D wake;
+			// The canvas, the margin around the header and the header, in CSS pixels
+			uniform vec2 size;
+			uniform vec2 margin;
+			uniform vec2 box;
+			varying vec2 vUv;
+
+			bool outside(vec2 uv) {
+				return any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)));
+			}
+			vec4 seen(vec2 q) {
+				vec2 uv = (q + margin) / size;
+				return outside(uv) ? vec4(0.0) : texture2D(picture, vec2(uv.x, 1.0 - uv.y));
+			}
+			vec4 disturbance(vec2 q) {
+				vec2 uv = q / box;
+				return outside(uv) ? vec4(0.5, 0.5, 0.0, 0.0) : texture2D(wake, uv);
+			}
+			vec4 pushed(vec2 q) {
+				return seen(q + 40.0 * (disturbance(q).rg - 0.5));
+			}
+
+			vec2 hash(vec2 p) {
+				p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+				return fract(sin(p) * 43758.5453) * 2.0 - 1.0;
+			}
+			float noise(vec2 p) {
+				vec2 i = floor(p);
+				vec2 f = fract(p);
+				vec2 u = f * f * (3.0 - 2.0 * f);
+				return mix(
+					mix(dot(hash(i), f), dot(hash(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
+					mix(dot(hash(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)), dot(hash(i + 1.0), f - 1.0), u.x),
+					u.y
+				);
+			}
+			// Stretched sideways, like the cloud
+			vec2 turbulence(vec2 q) {
+				vec2 p = q * vec2(0.03, 0.08);
+				vec2 sum = vec2(0.0);
+				float amplitude = 1.0;
+				for (int i = 0; i < 3; i++) {
+					sum += amplitude * vec2(noise(p), noise(p + vec2(17.3, -9.1)));
+					p *= 2.0;
+					amplitude *= 0.5;
+				}
+				return sum * 0.5 + 0.5;
+			}
+
+			void main() {
+				vec2 q = vec2(vUv.x, 1.0 - vUv.y) * size - margin;
+				float tear = disturbance(q).b;
+				vec4 colour = pushed(q);
+				if (tear > 0.004) {
+					vec4 wisps = vec4(0.0);
+					float total = 0.0;
+					for (int i = -1; i <= 1; i++) {
+						for (int j = -1; j <= 1; j++) {
+							vec2 o = vec2(float(i), float(j)) * 2.5;
+							float weight = exp(-dot(o, o) / 12.5);
+							vec2 s = q + o;
+							wisps += weight * pushed(s + 22.0 * (turbulence(s) - 0.5));
+							total += weight;
+						}
+					}
+					vec4 smoky = wisps / total * tear;
+					colour = smoky + colour * (1.0 - tear) * (1.0 - smoky.a);
+				}
+				gl_FragColor = colour * (1.0 - 0.85 * tear);
+			}
+		`;
+		const smokeMaterial = new THREE.ShaderMaterial({
+			uniforms: {
+				picture: { value: pictured },
+				wake: { value: wake },
+				size: { value: new THREE.Vector2() },
+				margin: { value: new THREE.Vector2() },
+				box: { value: new THREE.Vector2() }
+			},
+			vertexShader: SMOKE_VERTEX,
+			fragmentShader: SMOKE_FRAGMENT,
+			blending: THREE.NoBlending,
+			depthTest: false,
+			depthWrite: false
+		});
+		const smokeQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), smokeMaterial);
+		smokeQuad.frustumCulled = false;
+		const smokeScene = new THREE.Scene().add(smokeQuad);
+		const smokeCamera = new THREE.Camera();
+		let smoking = false;
 
 		function measure() {
 			if (!header) return;
+			stop();
 			const origin = host.getBoundingClientRect();
 			const box = header.getBoundingClientRect();
 			headerBox = {
@@ -1361,20 +1469,129 @@
 				w: box.width,
 				h: box.height
 			};
-			tearMap.width = wakeMap.width = Math.max(1, Math.round(box.width * WAKE_SCALE));
-			tearMap.height = wakeMap.height = Math.max(1, Math.round(box.height * WAKE_SCALE));
-			const cells = wakeMap.width * wakeMap.height;
+			if (flag) {
+				const cloth = flag.getBoundingClientRect();
+				flagBox = {
+					x: cloth.left - box.left + cloth.width / 2,
+					y: cloth.top - box.top + cloth.height / 2,
+					w: cloth.width
+				};
+			}
+			W = Math.max(1, Math.round(box.width * WAKE_SCALE));
+			H = Math.max(1, Math.round(box.height * WAKE_SCALE));
+			const cells = W * H;
 			pushX = new Float32Array(cells);
 			pushY = new Float32Array(cells);
 			torn = new Float32Array(cells);
 			spare = new Float32Array(cells);
-			pixels = wake.createImageData(wakeMap.width, wakeMap.height);
-			tearPixels = tearing.createImageData(tearMap.width, tearMap.height);
-			for (const image of [wakeImage!, tearImage!]) {
-				image.setAttribute('width', String(box.width));
-				image.setAttribute('height', String(box.height));
-			}
+			wake.dispose();
+			wake = new THREE.DataTexture(new Uint8Array(cells * 4), W, H);
+			wake.magFilter = wake.minFilter = THREE.LinearFilter;
+			smokeMaterial.uniforms.wake!.value = wake;
 			calm();
+
+			const margin = { x: Math.round(box.width * 0.05), y: Math.round(box.height * 0.25) };
+			const width = Math.ceil(box.width) + margin.x * 2;
+			const height = Math.ceil(box.height) + margin.y * 2;
+			Object.assign(overlay.style, {
+				left: `${box.left + window.scrollX - margin.x}px`,
+				top: `${box.top + window.scrollY - margin.y}px`
+			});
+			const ratio = Math.min(2, window.devicePixelRatio);
+			smoke.setPixelRatio(ratio);
+			smoke.setSize(width, height);
+			picture.width = width * ratio;
+			picture.height = height * ratio;
+			// Drawn to in the page's own coordinates
+			drawing.setTransform(
+				ratio,
+				0,
+				0,
+				ratio,
+				(margin.x - box.left) * ratio,
+				(margin.y - box.top) * ratio
+			);
+			const { uniforms } = smokeMaterial;
+			(uniforms.size!.value as THREE.Vector2).set(width, height);
+			(uniforms.margin!.value as THREE.Vector2).set(margin.x, margin.y);
+			(uniforms.box!.value as THREE.Vector2).set(box.width, box.height);
+		}
+
+		// The header's words as they are now, every letter where the page has put it. The flag
+		// isn't in it: the page's own keeps waving in its place, untouched
+		// Plain, not reactive: only the smoke reads it
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
+		const written = new Set<HTMLElement>();
+		function photograph() {
+			if (!header) return;
+			// In their own colours, even while they're hidden
+			for (const words of written) words.style.color = '';
+			drawing.save();
+			drawing.resetTransform();
+			drawing.clearRect(0, 0, picture.width, picture.height);
+			drawing.restore();
+			const range = document.createRange();
+			const walker = document.createTreeWalker(header, NodeFilter.SHOW_TEXT);
+			for (
+				let node = walker.nextNode() as Text | null;
+				node;
+				node = walker.nextNode() as Text | null
+			) {
+				const parent = node.parentElement!;
+				if (parent.closest('[aria-hidden="true"]') || !node.data.trim()) continue;
+				written.add(parent);
+				const style = getComputedStyle(parent);
+				drawing.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+				drawing.fillStyle = style.color;
+				// From the top of the text's box down to its baseline
+				const ascent = drawing.measureText('H').fontBoundingBoxAscent;
+				for (let i = 0; i < node.data.length; i++) {
+					if (!node.data[i]!.trim()) continue;
+					range.setStart(node, i);
+					range.setEnd(node, i + 1);
+					const rect = range.getClientRects()[0];
+					if (rect) drawing.fillText(node.data[i]!, rect.left, rect.top + ascent);
+				}
+			}
+			for (const link of header.querySelectorAll('a')) {
+				const style = getComputedStyle(link);
+				if (!style.textDecorationLine.includes('underline')) continue;
+				drawing.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+				drawing.fillStyle = style.textDecorationColor;
+				const ascent = drawing.measureText('H').fontBoundingBoxAscent;
+				const offset = parseFloat(style.textUnderlineOffset) || 0;
+				const thickness = parseFloat(style.textDecorationThickness) || 1;
+				for (const rect of link.getClientRects()) {
+					drawing.fillRect(rect.left, rect.top + ascent + offset, rect.width, thickness);
+				}
+			}
+			pictured.needsUpdate = true;
+			if (smoking) for (const words of written) words.style.color = 'transparent';
+		}
+
+		// The header's colours change with the phase of the day: the picture follows at once
+		const phases = new MutationObserver(() => {
+			if (smoking) photograph();
+		});
+		phases.observe(document.documentElement, { attributes: true, attributeFilter: ['data-sky'] });
+
+		// The smoke takes the header's place, drawn as it is before the header is hidden, so
+		// there's never a frame without it
+		function start() {
+			if (smoking || !header) return;
+			smoking = true;
+			photograph();
+			paint();
+			overlay.style.display = '';
+			smoke.render(smokeScene, smokeCamera);
+			for (const words of written) words.style.color = 'transparent';
+		}
+		function stop() {
+			if (!smoking || !header) return;
+			smoking = false;
+			stirred = -Infinity;
+			overlay.style.display = 'none';
+			for (const words of written) words.style.color = '';
 		}
 
 		function calm() {
@@ -1384,26 +1601,19 @@
 			paint();
 		}
 
-		// The two maps, drawn from the disturbance for the filter to read; returns how torn
-		// the worst of it still is. At rest the push map is a mid grey, which leaves the
-		// header where it is, and the tear map is black
+		// The map, from the disturbance, for the shader to read; returns how torn the worst of it
+		// still is. At rest it pushes nothing and tears nothing
 		function paint() {
 			let left = 0;
-			const push = pixels!.data;
-			const tear = tearPixels!.data;
-			for (let c = 0; c < torn.length; c++) {
+			const map = wake.image.data as Uint8Array;
+			for (let c = 0, i = 0; c < torn.length; c++, i += 4) {
 				left = Math.max(left, torn[c]!);
-				push[c * 4] = 128 - pushX[c]! * 127;
-				push[c * 4 + 1] = 128 - pushY[c]! * 127;
-				push[c * 4 + 2] = 128;
-				push[c * 4 + 3] = 255;
-				tear[c * 4] = tear[c * 4 + 1] = tear[c * 4 + 2] = torn[c]! * 255;
-				tear[c * 4 + 3] = 255;
+				map[i] = 128 - pushX[c]! * 127;
+				map[i + 1] = 128 - pushY[c]! * 127;
+				map[i + 2] = torn[c]! * 255;
+				map[i + 3] = 255;
 			}
-			wake.putImageData(pixels!, 0, 0);
-			tearing.putImageData(tearPixels!, 0, 0);
-			wakeImage!.setAttribute('href', wakeMap.toDataURL());
-			tearImage!.setAttribute('href', tearMap.toDataURL());
+			wake.needsUpdate = true;
 			return left;
 		}
 
@@ -1424,9 +1634,23 @@
 			const dy = y - last.y;
 			const length = Math.hypot(dx, dy);
 			if (length < 0.5) return;
+			if (flagBox.w) {
+				// How close it came to the flag along the way, and how fast it was going
+				const along = Math.max(
+					0,
+					Math.min(1, ((flagBox.x - last.x) * dx + (flagBox.y - last.y) * dy) / length ** 2)
+				);
+				const miss = Math.hypot(last.x + dx * along - flagBox.x, last.y + dy * along - flagBox.y);
+				const reach = flagBox.w * 2.5;
+				if (miss < reach) {
+					const strength = (1 - miss / reach) ** 1.5 * Math.min(1, length / 10);
+					if (strength > gust) {
+						gust = strength;
+						gustWay = Math.sign(dx) || gustWay;
+					}
+				}
+			}
 			// Along the way it went, the cloud is torn and dragged on in its direction of flight
-			const W = wakeMap.width;
-			const H = wakeMap.height;
 			const radius = 13 * WAKE_SCALE;
 			const ax = last.x * WAKE_SCALE;
 			const ay = last.y * WAKE_SCALE;
@@ -1452,7 +1676,34 @@
 				}
 			}
 			stirred = performance.now();
-			header.style.filter = 'url(#wake)';
+			start();
+		}
+
+		// The gust at the flag: how strong, and which way it blew; and how far the flag has caught
+		// up with it. It flaps faster, the wave and its folds sped up together so the ripple holds,
+		// and leans from the hoist. Only what the compositor can do on its own: the animations'
+		// rates and the flag's transform, written only when they've moved enough to see, and not
+		// at all once it's calm
+		let gust = 0;
+		let gustWay = 1;
+		let flapping = 0;
+		let rate = 1;
+		let flagAnimations: Animation[] = [];
+		function flutter(dt: number) {
+			if (!flag || (gust === 0 && flapping === 0)) return;
+			// It catches the gust at once, and the gust dies away over a couple of seconds
+			gust = gust < 0.005 ? 0 : gust * Math.exp(-dt * 1.6);
+			flapping += (gust - flapping) * Math.min(1, dt * (gust > flapping ? 14 : 4));
+			if (gust === 0 && flapping < 0.005) flapping = 0;
+			const next = 1 + flapping * 3.5;
+			if (Math.abs(next - rate) > 0.04 || (flapping === 0 && rate !== 1)) {
+				rate = flapping === 0 ? 1 : next;
+				if (!flagAnimations.length) flagAnimations = flag.getAnimations({ subtree: true });
+				for (const animation of flagAnimations) animation.updatePlaybackRate(rate);
+			}
+			flag.style.transform = flapping
+				? `rotate(${gustWay * flapping * 7}deg) scaleX(${1 - flapping * (gustWay < 0 ? 0.3 : 0.08)})`
+				: '';
 		}
 
 		// The disturbance spreads a little and, slowly, fades back to calm, in steady steps of a
@@ -1462,17 +1713,14 @@
 		function settle(dt: number) {
 			if (!header || stirred === -Infinity) return;
 			if (stirred === 0) {
-				stirred = -Infinity;
 				owed = 0;
-				header.style.filter = '';
+				stop();
 				calm();
 				return;
 			}
 			// Never more than a few steps at once, after a stall
 			owed = Math.min(owed + dt, SETTLE_STEP * 3);
 			if (owed < SETTLE_STEP) return;
-			const W = wakeMap.width;
-			const H = wakeMap.height;
 			const heal = 0.995;
 			for (; owed >= SETTLE_STEP; owed -= SETTLE_STEP) {
 				for (const field of [pushX, pushY, torn]) {
@@ -1490,6 +1738,7 @@
 				}
 			}
 			if (paint() < 0.02) stirred = 0;
+			smoke.render(smokeScene, smokeCamera);
 		}
 
 		// The vehicle nearest the pointer on screen, within reach of a fingertip
@@ -1741,26 +1990,41 @@
 			motorcycles(still ? 0 : dt * 9, clock);
 			physics(dt, now / 1000);
 			settle(dt);
+			flutter(dt);
 			cableLights(clock);
 			beacons.material.opacity =
 				still || Math.sin(clock * 3) > -0.3 || now / 1000 - cheering < 3 ? 1 : 0.15;
 			if (!still) twinkle();
 			drawSea(clock);
 			renderer.render(scene, tall);
+			if (!drawn) {
+				drawn = true;
+				onready?.();
+			}
 		}
+		let drawn = false;
 		frame = requestAnimationFrame(loop);
 
 		return () => {
 			cancelAnimationFrame(frame);
 			observer.disconnect();
+			phases.disconnect();
 			host.removeEventListener('touchstart', touchstart);
 			host.removeEventListener('pointerdown', down);
 			host.removeEventListener('pointermove', move);
 			host.removeEventListener('pointerup', up);
 			host.removeEventListener('pointercancel', up);
 			renderer.dispose();
-			svg.remove();
-			if (header) header.style.filter = '';
+			gust = flapping = 0;
+			if (flag) flag.style.transform = '';
+			for (const animation of flagAnimations) animation.updatePlaybackRate(1);
+			stop();
+			overlay.remove();
+			smoke.dispose();
+			pictured.dispose();
+			wake.dispose();
+			smokeMaterial.dispose();
+			smokeQuad.geometry.dispose();
 		};
 	});
 </script>
