@@ -2058,7 +2058,11 @@
 			return hits;
 		}
 
-		function swipe(event: PointerEvent) {
+		// How fast a carried vehicle has to be swung through the traffic, in pixels a second, to
+		// knock it off: slower, it's being picked up or put down, and passes the others by
+		const RAM = 400;
+
+		function swipe(event: PointerEvent, least = 0) {
 			const now = performance.now();
 			const last = sweep[sweep.length - 1]!;
 			const hits = crossed(
@@ -2069,8 +2073,14 @@
 			while (sweep.length > 2 && now - sweep[1]!.at > FLING_WINDOW) sweep.shift();
 			const first = sweep[0]!;
 			const span = Math.max(FLING_WINDOW / 2, now - first.at) / 1000;
-			// How fast the pointer's going across the screen, in pixels a second
-			const speed = Math.hypot(event.clientX - first.x, event.clientY - first.y) / span;
+			// How fast the pointer's going across the screen, in pixels a second: along the way it
+			// went, so a car shaken back and forth over the traffic counts as moving
+			let path = 0;
+			for (let i = 1; i < sweep.length; i++) {
+				path += Math.hypot(sweep[i]!.x - sweep[i - 1]!.x, sweep[i]!.y - sweep[i - 1]!.y);
+			}
+			const speed = path / span;
+			if (speed < least) return;
 			const force = Math.min(1, speed / 3000);
 			for (const { id, close } of hits) {
 				const vehicle = lift(id);
@@ -2141,7 +2151,8 @@
 			waft(held);
 			held.mesh.rotation.z = THREE.MathUtils.clamp(-held.velocity.x * 0.004, -0.5, 0.5);
 			moved = now;
-			swipe(event);
+			// Swung hard along the deck, among the traffic; lifted clear of it, it passes over
+			swipe(event, onBridge(event) ? RAM : Infinity);
 		}
 
 		function up() {
