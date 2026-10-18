@@ -6,10 +6,14 @@
 		url: string;
 		/** What the request returns, shown faintly until it's sent */
 		preview: unknown;
+		/** The headers it comes with, as name and value */
+		previewHeaders: [string, string][];
 		reducedMotion: boolean;
 	}
 
-	let { path, url, preview, reducedMotion }: Props = $props();
+	import { fade } from 'svelte/transition';
+
+	let { path, url, preview, previewHeaders, reducedMotion }: Props = $props();
 
 	// Shown as just the path; Copy gives the full URL
 	const endpoint = $derived(url.slice(new URL(url).origin.length));
@@ -19,6 +23,20 @@
 	let status = $state('');
 	let headers = $state<[string, string][]>([]);
 	let shown = $state('');
+	// The preview, until the first response has written over it, line by line
+	const example = $derived(JSON.stringify(preview, null, 2));
+	let rest = $state('');
+
+	// The headers worth showing, in this order
+	const SHOWN = ['content-type', 'cache-control', 'access-control-allow-origin'];
+	const pick = (get: (name: string) => string | null | undefined) =>
+		SHOWN.flatMap((name) => {
+			const value = get(name);
+			return value ? [[name, value] as [string, string]] : [];
+		});
+	const exampleHeaders = $derived(
+		pick((name) => previewHeaders.find(([key]) => key === name)?.[1])
+	);
 	// The status line and headers as they're drawn, scrambling along with the body. The real values
 	// above are what's read out
 	let shownStatus = $state('');
@@ -75,18 +93,14 @@
 		const id = ++run;
 		// Sent before: the last response stays put until the new one replaces it
 		const first = !shown;
+		if (first) rest = example;
 		stage = 'sending';
 		const started = performance.now();
 		const request = fetch(path)
 			.then(async (res) => {
 				elapsed = Math.round(performance.now() - started);
 				status = `${res.status} ${res.statusText || (res.ok ? 'OK' : '')}`.trim();
-				headers = ['content-type', 'cache-control', 'access-control-allow-origin'].flatMap(
-					(name) => {
-						const value = res.headers.get(name);
-						return value ? [[name, value] as [string, string]] : [];
-					}
-				);
+				headers = pick((name) => res.headers.get(name));
 				const text = await res.text();
 				try {
 					return JSON.stringify(JSON.parse(text), null, 2);
@@ -106,6 +120,7 @@
 
 		const time = `${elapsed} ms`;
 		const show = () => {
+			rest = '';
 			shown = body;
 			shownStatus = status;
 			shownTime = time;
@@ -120,6 +135,7 @@
 		// Sent again: the status, headers and response glitch through random characters and settle
 		// back into place, without anything moving
 		if (!first) {
+			rest = '';
 			const scrambled = {
 				body: scrambler(body),
 				status: scrambler(status),
@@ -143,21 +159,25 @@
 		shownTime = time;
 		shownHeaders = headers;
 
-		// The first response streams in, a little at a time
-		for (let i = 0; i <= body.length; i += 24) {
-			shown = body.slice(0, i);
-			await wait(16);
+		// The first response writes over the preview from the top, a line at a time, so it reads as
+		// the faint example coming up to full strength, with nothing moving
+		// Half a second at most, however long the month
+		const lines = body.split('\n');
+		const before = example.split('\n');
+		const pace = Math.min(28, 500 / lines.length);
+		for (let n = 1; n <= lines.length; n++) {
+			shown = lines.slice(0, n).join('\n');
+			rest = before.length > n ? `\n${before.slice(n).join('\n')}` : '';
+			await wait(pace);
 			// Sent again while this one was still coming in: the new one takes over
 			if (id !== run) return;
 		}
-		shown = body;
+		show();
 	}
 
-	const text = $derived(stage === 'idle' ? JSON.stringify(preview, null, 2) : shown);
-
 	// The JSON, split into keys, strings, numbers and the rest, to colour each
-	const tokens = $derived(
-		[
+	function tokenize(text: string) {
+		return [
 			...text.matchAll(
 				/("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?)|[^"\w-]+|\w+|-/g
 			)
@@ -171,8 +191,12 @@
 						: m[4]
 							? { text: m[4], kind: 'number', rest: '' }
 							: { text: m[0], kind: '', rest: '' }
-		)
-	);
+		);
+	}
+
+	const tokens = $derived(tokenize(shown));
+	// What's left of the preview: all of it until it's sent
+	const ghost = $derived(tokenize(stage === 'idle' ? example : rest));
 </script>
 
 <div class="request">
@@ -241,7 +265,7 @@
 			Send request
 		</button>
 		{#if shownStatus}
-			<p class="status">
+			<p class="status" in:fade={{ duration: reducedMotion ? 0 : 180 }}>
 				<span>{shownStatus}</span>
 				<span class="time">{shownTime}</span>
 			</p>
@@ -250,15 +274,19 @@
 
 	<!-- Always there, so the page doesn't shift when the response arrives: until then, a faint
 	     preview of it -->
-	<div class="terminal">
-		{#if shownStatus}
-			{#each shownHeaders as [name, value] (name)}
+	{#snippet json(tokens: ReturnType<typeof tokenize>)}{#each tokens as token, i (i)}<span
+				class={token.kind}>{token.text}</span
+			>{token.rest}{/each}{/snippet}
+
+	<div class="terminal" class:waiting={stage !== 'idle'}>
+		<!-- The preview, headers and all, fades back while it's on its way, and the response writes
+		     over it from the top, so nothing moves -->
+		<div class="headers" class:ghost={!shownStatus}>
+			{#each shownStatus ? shownHeaders : exampleHeaders as [name, value] (name)}
 				<p class="header"><span>{name}:</span> {value}</p>
 			{/each}
-		{/if}
-		<pre class:ghost={stage === 'idle'}>{#each tokens as token, i (i)}<span class={token.kind}
-					>{token.text}</span
-				>{token.rest}{/each}</pre>
+		</div>
+		<pre>{@render json(tokens)}<span class="ghost">{@render json(ghost)}</span></pre>
 	</div>
 	<!-- Read out once when the response arrives, not as it streams in -->
 	<span class="visually-hidden" role="status"
@@ -497,8 +525,8 @@
 		font-weight: 400;
 	}
 
-	.header:last-of-type {
-		margin-bottom: 0.75rem;
+	.headers {
+		padding-bottom: 0.75rem;
 	}
 
 	.header span {
@@ -507,7 +535,6 @@
 
 	pre {
 		margin: 0;
-		transition: opacity 0.3s ease-out;
 		font: inherit;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
@@ -515,8 +542,19 @@
 
 	/* An example until it's sent: a little fainter than the real thing, still easy to read */
 	.ghost {
-		margin: 0;
 		opacity: 0.9;
+		transition: opacity 0.3s ease-out;
+	}
+
+	/* Sent, it falls back, so each line of the response stands out as it arrives over it */
+	.waiting .ghost {
+		opacity: 0.35;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ghost {
+			transition: none;
+		}
 	}
 
 	.string {
