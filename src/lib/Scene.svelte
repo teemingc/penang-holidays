@@ -27,6 +27,10 @@
 	// As hard as a vehicle can be flung, in units a second: a hard flick crosses the page
 	const FLING = 320;
 	const REACH = 2400;
+	// Where a lamp with nothing to light goes: past the far end of the camera's view, so it's
+	// never drawn. Just below the water isn't far enough: the sea is painted behind the scene,
+	// so a lamp under it would shine through
+	const UNSEEN = -1e6;
 	const PIER_GAP = 45;
 	// Lamp posts along both edges of the deck
 	const LAMP_GAP = 36;
@@ -630,7 +634,7 @@
 					cars.setMatrixAt(n, dummy.matrix);
 					// The west end of each car faces the viewer
 					for (const side of [-0.75, 0.75]) {
-						const ly = gone ? -100 : y;
+						const ly = gone ? UNSEEN : y;
 						if (lane.way < 0) heads.setXYZ(h++, x - 2.7, ly + 0.9, z + side);
 						else tails.setXYZ(k++, x - 2.7, ly + 1.1, z + side);
 					}
@@ -694,8 +698,8 @@
 				bikes.setMatrixAt(i, dummy.matrix);
 				const facing = rider.way < 0 ? heads : tails;
 				const hidden = rider.way < 0 ? tails : heads;
-				facing.setXYZ(i, x - 1.1, gone ? -100 : y + 1.1, z);
-				hidden.setXYZ(i, 0, -100, 0);
+				facing.setXYZ(i, x - 1.1, gone ? UNSEEN : y + 1.1, z);
+				hidden.setXYZ(i, 0, UNSEEN, 0);
 			});
 			bikes.instanceMatrix.needsUpdate = true;
 			heads.needsUpdate = tails.needsUpdate = true;
