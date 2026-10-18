@@ -50,6 +50,7 @@
 			const { top, horizon } = paletteAt(sun);
 			root.style.setProperty('--top', rgb(top));
 			root.style.setProperty('--horizon', rgb(horizon));
+			document.querySelector('meta[name="theme-color"]')?.setAttribute('content', rgb(top));
 		};
 		update();
 		const timer = setInterval(update, 60_000);
@@ -127,6 +128,11 @@
 	</a>
 </div>
 
+<!-- Safari on iOS tints its bars from what's fixed along the edges of the screen, so on a phone
+     each edge has a strip of the colour that's there -->
+<div class="edge top" aria-hidden="true"></div>
+<div class="edge bottom" aria-hidden="true"></div>
+
 <style>
 	/* The sky over Penang right now: night, dawn, day or dusk. The sky's own colours here are
 	   only for a page without scripts: otherwise --top and --horizon are blended from
@@ -163,11 +169,57 @@
 		--ink-soft: rgb(243 244 247 / 0.8);
 	}
 
+	/* The solid colour is what a browser tints its bars with, and shows past the ends of the
+	   page. It's the root's, so the body's sky can go beneath the body */
+	:global(:root) {
+		background: var(--top);
+	}
+
 	:global(body) {
 		min-height: 100dvh;
-		background: linear-gradient(var(--top), var(--horizon)) fixed;
+		background: none;
 		color: var(--ink);
 		font-family: 'Schibsted Grotesk Variable', system-ui, sans-serif;
+	}
+
+	/* The sky, fixed to the screen however far the page scrolls: Safari on iOS ignores a fixed
+	   background, and would stretch it down the whole page instead, so it's a layer of its own */
+	:global(body::before) {
+		content: '';
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		background: linear-gradient(var(--top), var(--horizon));
+	}
+
+	.edge {
+		display: none;
+	}
+
+	@media (max-width: 900px) {
+		.edge {
+			display: block;
+			position: fixed;
+			left: 0;
+			right: 0;
+			height: 4px;
+			pointer-events: none;
+		}
+
+		.edge.top {
+			top: 0;
+			background: var(--top);
+		}
+
+		.edge.bottom {
+			bottom: 0;
+			background: var(--horizon);
+		}
+
+		/* At dawn and dusk the foot of the screen is under the shade of evening, below */
+		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .edge.bottom {
+			background: color-mix(in srgb, rgb(26 20 56) 68%, var(--horizon));
+		}
 	}
 
 	.page {

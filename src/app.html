@@ -4,6 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<meta name="theme-color" content="rgb(5 8 20)" />
 		<script>
 			// Colour the page for the time of day in Penang before it's first painted. This is a
 			// rough copy of the sun's position in src/lib/sky.ts, which keeps it up to date after
@@ -55,10 +56,14 @@
 							: e < 10 * rad
 								? [twilight, sky.day, e / (10 * rad)]
 								: [sky.day, sky.day, 0];
-				['--top', '--horizon'].forEach((name, i) => {
+				const [top] = ['--top', '--horizon'].map((name, i) => {
 					const mixed = from[i].map((c, k) => Math.round(c + (to[i][k] - c) * t));
-					document.documentElement.style.setProperty(name, `rgb(${mixed.join(' ')})`);
+					const colour = `rgb(${mixed.join(' ')})`;
+					document.documentElement.style.setProperty(name, colour);
+					return colour;
 				});
+				// Browsers that tint their own bars to the page take it from here
+				document.querySelector('meta[name="theme-color"]').content = top;
 			}
 		</script>
 		<style>
@@ -70,10 +75,16 @@
 			:root[data-sky='day'] {
 				color-scheme: light;
 			}
+			/* Safari on iOS colours the bars at the edges of the screen from the page's solid
+			   background colour, not its gradient, so it's the sky at the top */
+			:root {
+				background-color: var(--top, rgb(5 8 20));
+			}
 			body {
 				margin: 0;
 				min-height: 100dvh;
-				background: linear-gradient(var(--top, rgb(5 8 20)), var(--horizon, rgb(22 32 66))) fixed;
+				background: linear-gradient(var(--top, rgb(5 8 20)), var(--horizon, rgb(22 32 66))) fixed
+					var(--top, rgb(5 8 20));
 			}
 		</style>
 		%sveltekit.head%
