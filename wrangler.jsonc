@@ -3,6 +3,11 @@
 	"name": "penang-holidays",
 	"main": "src/worker.ts",
 	"compatibility_date": "2026-10-01",
+	// Serve repeat requests from Cloudflare's cache without running the Worker, for as long as
+	// the response's Cache-Control allows
+	"cache": {
+		"enabled": true
+	},
 	"assets": {
 		"directory": "./data",
 		"binding": "ASSETS",

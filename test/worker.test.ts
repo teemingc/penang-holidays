@@ -27,7 +27,7 @@ async function get(path: string) {
 }
 
 test('caches successful responses but not errors', async () => {
-	assert.equal((await get('/2026')).cacheControl, 'public, max-age=86400');
+	assert.equal((await get('/2026')).cacheControl, 'public, max-age=3600');
 	assert.equal((await get('/1999')).cacheControl, 'no-store');
 });
 

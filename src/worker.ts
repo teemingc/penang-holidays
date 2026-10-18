@@ -5,9 +5,10 @@ export interface Env {
 	ASSETS: { fetch(input: string): Promise<Response> };
 }
 
-// Holidays rarely change, so browsers can reuse a successful response for a day.
+// Cloudflare's cache (see wrangler.jsonc) and browsers reuse a successful response for an hour,
+// so a scrape that changes the data shows up within the hour.
 // Errors aren't cached, so a year that gets published shows up straight away.
-const CACHE_CONTROL = 'public, max-age=86400';
+const CACHE_CONTROL = 'public, max-age=3600';
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {

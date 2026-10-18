@@ -43,6 +43,8 @@ A Cloudflare Worker serves the same data, reading `data/` as static assets:
 | `GET /2026`   | All holidays in 2026                    |
 | `GET /2026/3` | Holidays in March 2026                  |
 
+Successful responses are cached for an hour, by browsers and by [Workers Cache](https://developers.cloudflare.com/workers/cache/), which answers repeat requests without running the Worker. Errors aren't cached.
+
 ## Updating
 
 The [Scrape workflow](.github/workflows/scrape.yml) runs every 1 December, and on demand from the Actions tab. It commits any new or changed JSON files, which redeploys the Worker.
