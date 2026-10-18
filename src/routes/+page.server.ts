@@ -1,14 +1,12 @@
 import { inMonth, years } from '#lib/holidays.js';
 import type { PageServerLoad } from './$types';
 
-// A static page with no JavaScript; it's rebuilt whenever the data changes
+// Rebuilt whenever the data changes
 export const prerender = true;
-export const csr = false;
 
 export const load: PageServerLoad = () => {
-	return {
-		years: years.map((y) => y.year),
-		// March has a handful of holidays, so the example stays short without being trimmed
-		example: inMonth(years.at(-1)!, 3)
-	};
+	// July of the latest year, for George Town World Heritage City Day on the 7th
+	const year = years.at(-1)!;
+	// What that request returns, shown faintly until it's sent
+	return { year: year.year, month: 7, preview: inMonth(year, 7) };
 };

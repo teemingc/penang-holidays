@@ -76,3 +76,9 @@ The app deploys through Cloudflare's Git integration (Workers Builds) on every p
 3. Set the build command to `pnpm build` and the deploy command to `npx wrangler deploy`.
 
 To deploy manually instead, run `pnpm run deploy`.
+
+## Why this exists
+
+General-purpose holiday libraries work out dates from rules and secondary sources, and can lag behind or differ from what a state actually gazettes. For Penang, the most reliable source is the state government itself, so this project takes its list straight from penang.gov.my and changes nothing.
+
+If you need more than Penang, the [holidays](https://github.com/vacanza/holidays) Python library covers a far bigger scope: countries and their subdivisions around the world, Malaysia's states among them. It's a great project, and worth a look if you need holidays beyond Penang.

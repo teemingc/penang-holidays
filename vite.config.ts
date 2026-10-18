@@ -13,6 +13,8 @@ export default defineConfig({
 			adapter: adapter()
 		})
 	],
+	// A port of its own, so it never lands on another project's dev server
+	server: { port: 5291, strictPort: true },
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

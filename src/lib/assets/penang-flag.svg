@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 18">
+	<!-- Light blue, white and yellow, with the pinang palm over the waves of the strait -->
+	<rect width="12" height="18" fill="#36c5ff" />
+	<rect x="12" width="12" height="18" fill="#fff" />
+	<rect x="24" width="12" height="18" fill="#ffd400" />
+	<path d="M18.4 13.4 Q19 9 17.6 4.6" stroke="#b8732f" stroke-width="1.1" fill="none" />
+	<path
+		d="M17.6 4.6 Q15 3.4 13.4 6 M17.6 4.6 Q15.6 5 15 7.4 M17.6 4.6 Q20.2 3.4 21.8 6 M17.6 4.6 Q19.6 5 20.2 7.4 M17.6 4.6 Q17.8 2.8 17.4 2"
+		stroke="#1fb35a"
+		stroke-width="1.1"
+		stroke-linecap="round"
+		fill="none"
+	/>
+	<path
+		d="M13 14.6 q1 -0.8 2 0 t2 0 t2 0 t2 0 t2 0 M13 16.2 q1 -0.8 2 0 t2 0 t2 0 t2 0 t2 0"
+		stroke="#3b78ff"
+		stroke-width="0.8"
+		fill="none"
+	/>
+</svg>
