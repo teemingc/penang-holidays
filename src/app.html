@@ -61,6 +61,21 @@
 				});
 			}
 		</script>
+		<style>
+			/* The sky, painted from the first frame rather than once the stylesheets arrive, so the
+			   page never flashes white. +page.svelte's own styles take over from here */
+			:root {
+				color-scheme: dark;
+			}
+			:root[data-sky='day'] {
+				color-scheme: light;
+			}
+			body {
+				margin: 0;
+				min-height: 100dvh;
+				background: linear-gradient(var(--top, rgb(5 8 20)), var(--horizon, rgb(22 32 66))) fixed;
+			}
+		</style>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

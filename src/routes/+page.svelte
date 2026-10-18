@@ -1,8 +1,13 @@
 <script lang="ts">
-	import '@fontsource-variable/newsreader';
-	import '@fontsource-variable/schibsted-grotesk';
-	import '@fontsource/ibm-plex-mono/400.css';
-	import '@fontsource/ibm-plex-mono/600.css';
+	// The fonts are linked from the head rather than imported, so they're registered once: an
+	// imported stylesheet is swapped for another as the page hydrates in development, and the
+	// text flashes in its fallback font while they load again
+	import fonts from '#lib/fonts.css?url';
+	// The Latin files every page uses, fetched alongside the stylesheets instead of after them
+	import newsreader from '@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2?url';
+	import schibsted from '@fontsource-variable/schibsted-grotesk/files/schibsted-grotesk-latin-wght-normal.woff2?url';
+	import plex400 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url';
+	import plex600 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2?url';
 	import { onMount } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
@@ -54,6 +59,10 @@
 
 <svelte:head>
 	<title>Penang Holidays API</title>
+	{#each [newsreader, schibsted, plex400, plex600] as font (font)}
+		<link rel="preload" href={font} as="font" type="font/woff2" crossorigin="anonymous" />
+	{/each}
+	<link rel="stylesheet" href={fonts} />
 	<meta
 		name="description"
 		content="Penang public holidays from the state government portal, as a free JSON API."
