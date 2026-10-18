@@ -145,14 +145,15 @@
 		--top: rgb(52 66 128);
 		--horizon: rgb(246 172 150);
 		--accent: #ffd2b8;
+		--ink-soft: rgb(243 244 247 / 0.8);
 	}
 
 	:global(:root[data-sky='day']) {
 		--top: rgb(92 160 226);
 		--horizon: rgb(206 230 246);
 		--ink: #0b1d36;
-		--ink-soft: rgb(11 29 54 / 0.72);
-		--accent: #0a5fb0;
+		--ink-soft: rgb(11 29 54 / 0.85);
+		--accent: #063f73;
 		color-scheme: light;
 	}
 
@@ -160,6 +161,7 @@
 		--top: rgb(38 40 98);
 		--horizon: rgb(244 140 82);
 		--accent: #ffc58f;
+		--ink-soft: rgb(243 244 247 / 0.8);
 		--button: #c2410c;
 	}
 
@@ -171,6 +173,8 @@
 	}
 
 	.page {
+		/* How far below the top of its area the request starts */
+		--drop: clamp(0.5rem, 9vh, 6rem);
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
 		grid-template-rows: auto minmax(0, 1fr) auto;
@@ -367,6 +371,28 @@
 		}
 	}
 
+	/* At dawn and dusk the sky low down is too light for light type and too dark for dark,
+	   so from just above the request to the foot of the page there's a shade of evening,
+	   coming on slowly over the sea above it, eased so it has no edge, and reaching the
+	   edges of the screen */
+	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page::before {
+		content: '';
+		grid-column: request;
+		grid-row: request / -1;
+		/* The same slow, eased fade from above and, beside the bridge, from the left, where it
+		   reaches well back over the sea so there's no line down the page */
+		--ease:
+			transparent, rgb(0 0 0 / 0.04) 2rem, rgb(0 0 0 / 0.14) 4rem, rgb(0 0 0 / 0.3) 6rem,
+			rgb(0 0 0 / 0.52) 8rem, rgb(0 0 0 / 0.76) 10rem, rgb(0 0 0 / 0.93) 12rem, #000 13rem;
+		margin: calc(var(--drop) - 14rem) -2.5rem -1.5rem -16rem;
+		background: rgb(26 20 56 / 0.68);
+		mask-image: linear-gradient(var(--ease)), linear-gradient(to right, var(--ease));
+		mask-composite: intersect;
+		/* Masked, it's a layer of its own, which would cover the type after it in the page */
+		z-index: -1;
+		pointer-events: none;
+	}
+
 	/* Level with the bridge, and filling the rest of the column so the response has room
 	   without the page moving */
 	.request {
@@ -374,7 +400,7 @@
 		display: flex;
 		min-width: 0;
 		min-height: 0;
-		padding-top: clamp(0.5rem, 9vh, 6rem);
+		padding-top: var(--drop);
 	}
 
 	.github {
@@ -384,9 +410,17 @@
 		justify-content: flex-end;
 		gap: 0.5rem;
 		padding-top: 1rem;
-		font-size: 0.875rem;
+		/* In the serif of the line under the title, which it answers */
+		font-family: 'Newsreader Variable', Georgia, serif;
+		font-weight: 450;
+		font-size: 1.0625rem;
 		color: var(--ink-soft);
 		text-decoration: none;
+	}
+
+	/* Small, so it takes the full ink in the evening shade */
+	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .github {
+		color: var(--ink);
 	}
 
 	.github:hover {
@@ -417,8 +451,15 @@
 			margin: 1.5rem -1.5rem 1.5rem;
 		}
 
-		.request {
-			padding-top: 0;
+		.page {
+			--drop: 0px;
+		}
+
+		/* Across the whole screen, so only its top edge is soft */
+		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page::before {
+			grid-column: 1 / -1;
+			margin-inline: -1.5rem;
+			mask-image: linear-gradient(var(--ease));
 		}
 
 		.github {

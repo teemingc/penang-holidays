@@ -400,9 +400,10 @@
 		overflow-wrap: anywhere;
 	}
 
+	/* An example until it's sent: a little fainter than the real thing, still easy to read */
 	.ghost {
 		margin: 0;
-		opacity: 0.35;
+		opacity: 0.9;
 	}
 
 	.string {
