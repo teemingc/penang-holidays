@@ -137,7 +137,6 @@
 		--ink: #f3f4f7;
 		--ink-soft: rgb(243 244 247 / 0.7);
 		--accent: #6fd0ff;
-		--button: #0a72c2;
 		color-scheme: dark;
 	}
 
@@ -162,7 +161,6 @@
 		--horizon: rgb(244 140 82);
 		--accent: #ffc58f;
 		--ink-soft: rgb(243 244 247 / 0.8);
-		--button: #c2410c;
 	}
 
 	:global(body) {

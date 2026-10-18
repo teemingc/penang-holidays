@@ -19,6 +19,11 @@
 	let status = $state('');
 	let headers = $state<[string, string][]>([]);
 	let shown = $state('');
+	// The status line and headers as they're drawn, scrambling along with the body. The real values
+	// above are what's read out
+	let shownStatus = $state('');
+	let shownTime = $state('');
+	let shownHeaders = $state<[string, string][]>([]);
 
 	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -50,6 +55,16 @@
 		if (/\d/.test(c)) return String(Math.floor(Math.random() * 10));
 		const letter = String.fromCharCode(97 + Math.floor(Math.random() * 26));
 		return c === c.toUpperCase() ? letter.toUpperCase() : letter;
+	}
+
+	// Draws text scrambled at a moment in its settling, each character landing in turn, left to
+	// right. true, false and null stay as they are, so no colour changes with them
+	function scrambler(text: string) {
+		const settle = [...text].map((_, i) => (i / text.length) * 200 + Math.random() * 100);
+		return (t: number) =>
+			text.replace(/\b(?:true|false|null)\b|[a-z0-9]/gi, (c, i) =>
+				c.length > 1 || t >= (settle[i] ?? 0) ? c : glitch(c)
+			);
 	}
 
 	// Which send is the latest: an older one still streaming in stops when a new one starts
@@ -89,27 +104,44 @@
 		const body = await request;
 		stage = 'done';
 
-		if (reducedMotion) {
+		const time = `${elapsed} ms`;
+		const show = () => {
 			shown = body;
+			shownStatus = status;
+			shownTime = time;
+			shownHeaders = headers;
+		};
+
+		if (reducedMotion) {
+			show();
 			return;
 		}
 
-		// Sent again: the response glitches through random characters and settles back into place,
-		// left to right, without anything moving. true, false and null stay as they are, so no colour
-		// changes with them
+		// Sent again: the status, headers and response glitch through random characters and settle
+		// back into place, without anything moving
 		if (!first) {
-			const settle = [...body].map((_, i) => (i / body.length) * 200 + Math.random() * 100);
+			const scrambled = {
+				body: scrambler(body),
+				status: scrambler(status),
+				time: scrambler(time),
+				headers: headers.map(([name, value]) => [name, scrambler(value)] as const)
+			};
 			const started = performance.now();
 			for (let t = 0; t < 300; t = performance.now() - started) {
-				shown = body.replace(/\b(?:true|false|null)\b|[a-z0-9]/gi, (c, i) =>
-					c.length > 1 || t >= (settle[i] ?? 0) ? c : glitch(c)
-				);
+				shown = scrambled.body(t);
+				shownStatus = scrambled.status(t);
+				shownTime = scrambled.time(t);
+				shownHeaders = scrambled.headers.map(([name, value]) => [name, value(t)]);
 				await wait(32);
 				if (id !== run) return;
 			}
-			shown = body;
+			show();
 			return;
 		}
+
+		shownStatus = status;
+		shownTime = time;
+		shownHeaders = headers;
 
 		// The first response streams in, a little at a time
 		for (let i = 0; i <= body.length; i += 24) {
@@ -143,38 +175,41 @@
 	);
 </script>
 
-<!-- The labels never change, so nothing around them moves: Send dims while it's on its way,
-     and Copy sends a little "Copied" floating up off it -->
-{#snippet label()}Send{/snippet}
-
 <div class="request">
-	{#snippet command(key: 'button' | 'label')}
-		<div class="command">
-			<code><span class="method">GET</span> {endpoint}</code>
-			{#if key === 'button'}
-				<button onclick={send} disabled={stage === 'sending'}>{@render label()}</button>
-				<!-- Both words share one slot, as wide as the longer, and swap in place -->
-				<button class="copy" onclick={copy} aria-label="Copy the URL">
-					<span class="word" class:gone={copied} aria-hidden="true">Copy</span>
-					<span class="word" class:gone={!copied} aria-hidden="true">Copied</span>
-				</button>
-				<span class="visually-hidden" role="status">{copied ? 'Copied' : ''}</span>
-			{:else}
-				<span class="send">{@render label()}</span>
-				<span class="send copy">
-					<span class="word" class:gone={copied}>Copy</span>
-					<span class="word" class:gone={!copied}>Copied</span>
-				</span>
-			{/if}
-		</div>
+	{#snippet command()}
+		<code><span class="method">GET</span> {endpoint}</code>
+	{/snippet}
+
+	<!-- The copy icon, or a tick once it's copied -->
+	{#snippet icons()}
+		<svg class="icon" class:gone={copied} viewBox="0 0 16 16" aria-hidden="true">
+			<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+			<path
+				d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"
+			/>
+		</svg>
+		<svg class="icon" class:gone={!copied} viewBox="0 0 16 16" aria-hidden="true">
+			<path d="m3 8.5 3.25 3.25L13 5" />
+		</svg>
 	{/snippet}
 
 	<div class="line">
-		{@render command('button')}
+		<div class="command">
+			{@render command()}
+			<!-- Copy sits with the path it copies; the icon swaps to a tick in place -->
+			<button class="copy" onclick={copy} aria-label="Copy the URL" title="Copy the full URL">
+				{@render icons()}
+			</button>
+			<span class="visually-hidden" role="status">{copied ? 'Copied' : ''}</span>
+		</div>
 
 		<!-- The request, mirrored in the sea below it and broken up by ripples -->
 		<div class="reflection" aria-hidden="true">
-			<div class="mirror">{@render command('label')}</div>
+			<div class="mirror command">
+				{@render command()}
+				<!-- The icon is part of the line, so the sea shows it too -->
+				<span class="copy">{@render icons()}</span>
+			</div>
 			<svg width="0" height="0">
 				<filter id="ripple">
 					<feTurbulence type="fractalNoise" baseFrequency="0.008 0.32" numOctaves="2" seed="3">
@@ -198,15 +233,26 @@
 		</div>
 	</div>
 
+	<!-- Send heads the response it brings back, and the status lands beside it. The label never
+	     changes, so nothing on the row moves -->
+	<div class="bar">
+		<button class="send" onclick={send} disabled={stage === 'sending'}>
+			<span class="return" aria-hidden="true">↵</span>
+			Send request
+		</button>
+		{#if shownStatus}
+			<p class="status">
+				<span>{shownStatus}</span>
+				<span class="time">{shownTime}</span>
+			</p>
+		{/if}
+	</div>
+
 	<!-- Always there, so the page doesn't shift when the response arrives: until then, a faint
 	     preview of it -->
 	<div class="terminal">
-		{#if status}
-			<p class="status">
-				<span>{status}</span>
-				<span class="time">{elapsed} ms</span>
-			</p>
-			{#each headers as [name, value] (name)}
+		{#if shownStatus}
+			{#each shownHeaders as [name, value] (name)}
 				<p class="header"><span>{name}:</span> {value}</p>
 			{/each}
 		{/if}
@@ -223,14 +269,13 @@
 <style>
 	.request {
 		display: grid;
-		grid-template-rows: auto auto minmax(0, 1fr);
+		grid-template-rows: auto auto auto minmax(0, 1fr);
 		gap: 1rem;
 		width: 100%;
 		font-family: 'IBM Plex Mono', ui-monospace, monospace;
 	}
 
-	/* The request, set in type on the sky with the word that sends it, and room underneath
-	   for its reflection */
+	/* The request, set in type on the sky, with room underneath for its reflection */
 	.line {
 		position: relative;
 		margin-bottom: 1.75rem;
@@ -238,8 +283,8 @@
 
 	.command {
 		display: flex;
-		align-items: baseline;
-		gap: 1.25rem;
+		align-items: center;
+		gap: 0.625rem;
 		font-size: clamp(1.5rem, 2.3vw, 2rem);
 		line-height: 1.2;
 	}
@@ -264,9 +309,12 @@
 		position: absolute;
 	}
 
+	/* Trimmed to the height of its capitals, so the icon beside it centres on the letters rather
+	   than on a line box with room for descenders */
 	code {
 		color: var(--ink);
 		font: inherit;
+		text-box: trim-both cap alphabetic;
 	}
 
 	@media (max-width: 900px) {
@@ -280,71 +328,129 @@
 		color: var(--accent);
 	}
 
-	button,
-	.send {
+	button {
 		padding: 0;
 		border: 0;
-		background: none;
-		color: var(--accent);
 		font: inherit;
-		font-size: 0.6em;
-		text-decoration: underline;
-		text-decoration-thickness: 1px;
-		text-underline-offset: 0.3em;
 		cursor: pointer;
 		/* A press is felt the moment it happens, however fast the response comes back */
 		transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-	}
-
-	button:hover {
-		text-decoration-thickness: 2px;
 	}
 
 	button:active:not(:disabled) {
 		transform: scale(0.97);
 	}
 
-	button:disabled {
-		cursor: default;
-		opacity: 0.45;
-		transition:
-			opacity 0.15s ease-out,
-			transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+	button:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 3px;
 	}
 
-	/* The reflection is only type, so it's pressed along with the button above it */
-	.line:has(button:not(.copy):active:not(:disabled)) .send:not(.copy),
-	.line:has(button.copy:active) .send.copy {
+	/* A quiet glyph after the path, brightening on hover */
+	.copy {
+		display: inline-grid;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		background: none;
+		color: var(--ink-soft);
+	}
+
+	/* The reflection is only an image of it, so it's pressed along with the button above it */
+	.line:has(button.copy:active) .mirror .copy {
 		transform: scale(0.97);
 	}
 
-	.copy {
-		display: inline-grid;
+	.copy:hover {
+		color: var(--ink);
+		background: color-mix(in srgb, var(--ink) 10%, transparent);
 	}
 
-	/* The word changes with a short crossfade and the slightest blur, no movement */
-	.word {
+	/* The icons swap with a short crossfade and the slightest blur, no movement */
+	.icon {
 		grid-area: 1 / 1;
-		justify-self: start;
+		width: 1rem;
+		height: 1rem;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.4;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 		transition:
 			opacity 0.18s ease-out,
 			filter 0.18s ease-out;
 	}
 
-	.word.gone {
+	.icon.gone {
 		opacity: 0;
 		filter: blur(2px);
 	}
 
+	/* Sent the way a terminal sends a line: a press of Return, drawn as a key in the same
+	   hairline ink as the rest of the column rather than a filled button */
+	.bar {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		min-height: 2.25rem;
+	}
+
+	.send {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.625rem;
+		background: none;
+		color: var(--accent);
+		font-size: 0.8125rem;
+		font-weight: 600;
+		line-height: 1;
+	}
+
+	.return {
+		display: inline-grid;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.5rem;
+		border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
+		border-bottom-width: 2px;
+		border-radius: 0.3125rem;
+		color: var(--ink);
+		font-size: 1rem;
+		font-weight: 400;
+		transition:
+			border-color 0.15s ease-out,
+			background-color 0.15s ease-out;
+	}
+
+	.send:hover .return {
+		border-color: color-mix(in srgb, var(--ink) 60%, transparent);
+		background: color-mix(in srgb, var(--ink) 8%, transparent);
+	}
+
+	/* Pressed, the key goes down rather than the whole thing shrinking */
+	.send:active:not(:disabled) {
+		transform: none;
+	}
+
+	.send:active:not(:disabled) .return {
+		border-bottom-width: 1px;
+		translate: 0 1px;
+	}
+
+	.send:disabled {
+		cursor: default;
+		opacity: 0.5;
+		transition: opacity 0.15s ease-out;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
-		.word {
+		.icon {
 			transition: none;
 		}
 
 		/* Pressed, it dims instead of shrinking */
-		button:active:not(:disabled),
-		.line:has(button:not(.copy):active:not(:disabled)) .send:not(.copy),
-		.line:has(button.copy:active) .send.copy {
+		button:active:not(:disabled) {
 			transform: none;
 			opacity: 0.7;
 		}
@@ -378,7 +484,9 @@
 
 	.status {
 		display: flex;
-		gap: 1rem;
+		gap: 0.75rem;
+		margin: 0;
+		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--ink);
 	}
@@ -388,12 +496,16 @@
 		font-weight: 400;
 	}
 
+	.header:last-of-type {
+		margin-bottom: 0.75rem;
+	}
+
 	.header span {
 		color: var(--ink);
 	}
 
 	pre {
-		margin: 0.75rem 0 0;
+		margin: 0;
 		transition: opacity 0.3s ease-out;
 		font: inherit;
 		white-space: pre-wrap;
