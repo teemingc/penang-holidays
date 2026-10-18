@@ -10,7 +10,7 @@ const USER_AGENT =
 
 const requested = process.argv.slice(2).map(Number);
 
-const published = parseHolidayPage(await fetchPage(), SOURCE_URL);
+const published = parseHolidayPage(await fetchPage());
 const years = requested.length
 	? published.filter(({ year }) => requested.includes(year))
 	: published;

@@ -12,7 +12,6 @@ export interface Holiday {
 
 export interface YearHolidays {
 	year: number;
-	source: string;
 	holidays: Holiday[];
 }
 

@@ -4,7 +4,7 @@ import { parseDates, parseHolidayPage } from './parse.ts';
 
 // Snapshot of the portal page taken on 17 Oct 2026
 const html = await readFile(new URL('fixtures/info-cuti-umum.html', import.meta.url), 'utf8');
-const years = parseHolidayPage(html, 'https://example.com');
+const years = parseHolidayPage(html);
 
 function holidaysIn(year: number) {
 	return years.find((y) => y.year === year)!.holidays;

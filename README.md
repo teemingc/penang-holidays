@@ -11,7 +11,6 @@ One file per year in [`data/`](data), e.g. [`data/2026.json`](data/2026.json):
 ```json
 {
 	"year": 2026,
-	"source": "https://www.penang.gov.my/index.php/component/sppagebuilder/page/50",
 	"holidays": [
 		{
 			"date": "2026-03-21",

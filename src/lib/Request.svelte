@@ -22,7 +22,6 @@
 	// sent and again whenever they're asked for. Short enough to fit a phone without wrapping
 	const DOCS = `{
   "year": number,
-  "source": string,    // where it's from
   "holidays": [
     {
       "date": string,  // YYYY-MM-DD

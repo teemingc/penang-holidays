@@ -32,7 +32,7 @@ const DAY_COUNT_PATTERN = /\(\s*\d+\s*hari\s*\)/i;
 /**
  * Parses every "Cuti Umum Tahun {year}" tab on the portal's public holiday page.
  */
-export function parseHolidayPage(html: string, source: string): YearHolidays[] {
+export function parseHolidayPage(html: string): YearHolidays[] {
 	const root = parse(html);
 	const years: YearHolidays[] = [];
 
@@ -47,7 +47,7 @@ export function parseHolidayPage(html: string, source: string): YearHolidays[] {
 		const holidays = parseYear(pane, year);
 		if (holidays.length === 0) throw new Error(`Found no holidays in the ${year} tab`);
 
-		years.push({ year, source, holidays });
+		years.push({ year, holidays });
 	}
 
 	return years.sort((a, b) => a.year - b.year);
