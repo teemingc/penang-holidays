@@ -12,6 +12,10 @@
 
 	let { reducedMotion, onready }: Props = $props();
 
+	// The canvases are hidden until the first frame is on them: some browsers paint a canvas
+	// white for a moment before anything is drawn to it
+	let shown = $state(false);
+
 	// The Penang Bridge across the strait, in metres, at the time of day it is in Penang. x runs
 	// east along the bridge, y is up from the sea, and z is south, towards the viewer
 
@@ -348,21 +352,100 @@
 
 		// Each lane is a queue, front to back. A car's place in it, its slot, says where the jam
 		// would have it; one taken out of the queue leaves a gap, and every car behind moves up a
-		// slot and drives on to close it. Cars leave at the far end and join again at the back,
-		// coming in from the near end, as do the ones that were thrown off once they're gone
+		// slot and drives on to close it. Cars leave at the far end and join again at the back of
+		// the shortest lane their way, coming in from the near end, as do the ones that were
+		// thrown off once they're gone
 		const SPAN = TRAFFIC_REACH * 2;
-		// How fast a car drives up into a gap, and how hard it speeds up and brakes
-		const GAP_SPEED = 14;
-		const GAP_ACCEL = 5;
-		const GAP_BRAKE = 8;
+		// Into a gap, every driver drives as they do in Penang: most keep up with the car ahead;
+		// some speed off, weaving through to either side of whoever's in the way; some sit right
+		// on the bumper of the car in front; and some hog the fast lane at their own pace
+		type Driver = {
+			/** Top speed, units a second; how hard they speed up and brake */
+			top: number;
+			accel: number;
+			brake: number;
+			/** The gap kept to the car ahead: standing, and seconds of it at speed */
+			standing: number;
+			headway: number;
+			/** Room wanted to cut into another lane, ahead and behind */
+			cut: [number, number];
+			/** Makes for the fast lane, by the median, and stays there at their own pace */
+			hog: boolean;
+			/** How quickly they swing across into the next lane */
+			swerve: number;
+		};
+		const hash = (n: number, k: number) => {
+			const v = Math.sin(n * 127.1 + k * 311.7) * 43758.5453;
+			return v - Math.floor(v);
+		};
+		const drivers: Driver[] = Array.from({ length: carCount }, (_, n) => {
+			const kind = hash(n, 0);
+			const r = hash(n, 1);
+			// Speeders
+			if (kind < 0.25)
+				return {
+					top: 30 + r * 10,
+					accel: 9,
+					brake: 14,
+					standing: 6,
+					headway: 0.3,
+					cut: [8, 5],
+					hog: false,
+					swerve: 3.5
+				};
+			// Tailgaters
+			if (kind < 0.45)
+				return {
+					top: 21 + r * 5,
+					accel: 7,
+					brake: 13,
+					standing: 5.4,
+					headway: 0.1,
+					cut: [10, 6],
+					hog: false,
+					swerve: 2.5
+				};
+			// Lane hoggers
+			if (kind < 0.53)
+				return {
+					top: 11 + r * 3,
+					accel: 3,
+					brake: 6,
+					standing: 6.4,
+					headway: 0.8,
+					cut: [12, 8],
+					hog: true,
+					swerve: 1
+				};
+			return {
+				top: 15 + r * 5,
+				accel: 5,
+				brake: 8,
+				standing: 6.2,
+				headway: 0.5,
+				cut: [14, 9],
+				hog: false,
+				swerve: 1.6
+			};
+		});
 		const travelled = new Float64Array(carCount);
 		const pace = new Float32Array(carCount);
 		const slot = new Float64Array(carCount);
+		// Which lane each car is in, where it is across the deck on its way there, and when it
+		// last changed lanes
+		const laneOf = Uint8Array.from({ length: carCount }, (_, n) => Math.floor(n / perLane));
+		const across = Float32Array.from(laneOf, (l) => LANES[l]!.z);
+		const drift = new Float32Array(carCount);
+		const changed = new Float64Array(carCount).fill(-Infinity);
 		const queues = LANES.map((lane, l) =>
 			Array.from({ length: perLane }, (_, i) => l * perLane + (lane.way > 0 ? perLane - 1 - i : i))
 		);
 		const queued = new Uint8Array(carCount).fill(1);
-		const front = LANES.map((lane, l) => (lane.way > 0 ? (perLane - 1) * CAR_GAP : 0) + l * 2.3);
+		// The heads of the queues a whole span short of the far end, which is the same place on the
+		// bridge, so they don't come round to the back again for an hour of lurching
+		const front = LANES.map(
+			(lane, l) => (lane.way > 0 ? (perLane - 1) * CAR_GAP - SPAN : 0) + l * 2.3
+		);
 		const placed = (n: number, l: number, t: number) =>
 			front[l]! - slot[n]! * CAR_GAP + jitter[n]! + lurch(t + l * 1.7 - slot[n]! * 0.12);
 		queues.forEach((lane, l) =>
@@ -373,13 +456,68 @@
 		);
 		let jammed = 0;
 
-		function rejoin(n: number, l: number, lane: number[], t: number) {
+		// The shortest lane going the same way as lane l
+		function shortest(l: number) {
+			let best = l;
+			LANES.forEach((lane, m) => {
+				if (lane.way === LANES[l]!.way && queues[m]!.length < queues[best]!.length) best = m;
+			});
+			return best;
+		}
+
+		function rejoin(n: number, l: number, t: number) {
+			const lane = queues[l]!;
 			const last = lane[lane.length - 1];
 			slot[n] = last === undefined ? 0 : slot[last]! + 1;
+			laneOf[n] = l;
+			across[n] = LANES[l]!.z;
 			travelled[n] = Math.min(travelled[n]!, placed(n, l, t));
 			pace[n] = 0;
 			lane.push(n);
 			queued[n] = 1;
+		}
+
+		const renumber = (lane: number[], from: number) => {
+			for (let q = from; q < lane.length; q++) slot[lane[q]!] = q;
+		};
+
+		// Stuck behind someone slower with a gap opening up beside them, a driver cuts into it,
+		// on whichever side it is. A lane hogger needs no reason to move over to the fast lane,
+		// and none to leave it
+		function overtake(n: number, l: number, q: number, t: number) {
+			const driver = drivers[n]!;
+			const lane = queues[l]!;
+			const leader = lane[q - 1];
+			if (t - changed[n]! < 2) return false;
+			const inside = (m: number) => Math.abs(LANES[m]!.z) < Math.abs(LANES[l]!.z);
+			if (!driver.hog) {
+				if (leader === undefined || pace[leader]! > driver.top * 0.75) return false;
+				const room = travelled[leader]! - travelled[n]!;
+				if (room > driver.standing + 8 + pace[n]! * 0.6) return false;
+			}
+			const sides = [l - 1, l + 1].filter(
+				(m) => LANES[m]?.way === LANES[l]!.way && (!driver.hog || inside(m))
+			);
+			if (hash(n, t) < 0.5) sides.reverse();
+			const [ahead, behind] = driver.cut;
+			for (const m of sides) {
+				const other = queues[m]!;
+				let i = 0;
+				while (i < other.length && travelled[other[i]!]! >= travelled[n]!) i++;
+				const before = other[i - 1];
+				const after = other[i];
+				if (before !== undefined && travelled[before]! - travelled[n]! < ahead) continue;
+				if (after !== undefined && travelled[n]! - travelled[after]! < behind) continue;
+				// Across, and everyone behind on both sides takes their new place in the queue
+				lane.splice(q, 1);
+				renumber(lane, q);
+				other.splice(i, 0, n);
+				renumber(other, i);
+				laneOf[n] = m;
+				changed[n] = t;
+				return true;
+			}
+			return false;
 		}
 
 		function jam(t: number) {
@@ -392,33 +530,79 @@
 					if (!taken.has(n)) continue;
 					lane.splice(q, 1);
 					queued[n] = 0;
-					for (let b = q; b < lane.length; b++) slot[lane[b]!]! -= 1;
+					renumber(lane, q);
 				}
-				// Past the far end, round to the back of the queue, from the near end
+				// Past the far end, round to the back of the shortest lane, from the near end
 				while (lane.length && travelled[lane[0]!]! >= SPAN) {
 					const n = lane.shift()!;
+					renumber(lane, 0);
 					travelled[n]! -= SPAN;
-					rejoin(n, l, lane, t);
+					rejoin(n, shortest(l), t);
 				}
-				for (let n = l * perLane; n < (l + 1) * perLane; n++) {
-					if (!queued[n] && !taken.has(n)) {
-						travelled[n] = 0;
-						rejoin(n, l, lane, t);
+			});
+			for (let n = 0; n < carCount; n++) {
+				if (!queued[n] && !taken.has(n)) {
+					travelled[n] = 0;
+					rejoin(n, shortest(Math.floor(n / perLane)), t);
+				}
+			}
+			const moving: number[] = [];
+			queues.forEach((lane, l) => {
+				// In the order they are on the road: one joined at the back of a lane still catching
+				// up can be ahead of the cars it was queued behind, and waits for them to pass
+				for (let q = 1; q < lane.length; q++) {
+					const n = lane[q]!;
+					let p = q;
+					while (p > 0 && travelled[lane[p - 1]!]! < travelled[n]!) {
+						lane[p] = lane[p - 1]!;
+						p--;
 					}
+					if (p === q) continue;
+					lane[p] = n;
+					renumber(lane, p);
 				}
-				for (const n of lane) {
-					// Up with the jam, or driving on to catch it up
+				lane.forEach((n, q) => {
+					const driver = drivers[n]!;
+					// Up with the jam, or driving on to catch it up, held back by whoever's ahead
 					const target = placed(n, l, t);
 					const left = target - travelled[n]!;
 					if (left < 0.5) {
-						travelled[n] = target;
+						// Cut in on, it waits for the jam to move on before closing up again
+						if (left > -0.5) travelled[n] = target;
 						pace[n] = 0;
-						continue;
+						return;
 					}
-					pace[n] = Math.min(pace[n]! + GAP_ACCEL * dt, GAP_SPEED, Math.sqrt(2 * GAP_BRAKE * left));
-					travelled[n] = Math.min(target, travelled[n]! + pace[n]! * dt);
-				}
+					const leader = lane[q - 1];
+					let room = left;
+					let limit = Infinity;
+					if (leader !== undefined) {
+						const gap =
+							travelled[leader]! - travelled[n]! - driver.standing - driver.headway * pace[n]!;
+						room = Math.min(room, Math.max(0, gap));
+						limit = Math.sqrt(2 * driver.brake * Math.max(0, gap)) + pace[leader]!;
+					}
+					pace[n] = Math.min(
+						pace[n]! + driver.accel * dt,
+						driver.top,
+						Math.sqrt(2 * driver.brake * left),
+						limit
+					);
+					travelled[n] = Math.min(travelled[n]! + Math.min(pace[n]! * dt, room), target);
+					moving.push(n);
+				});
 			});
+			// Then the overtaking, a car at a time
+			for (const n of moving) {
+				const l = laneOf[n]!;
+				overtake(n, l, queues[l]!.indexOf(n), t);
+			}
+			// Swinging across into the lane they're in
+			for (let n = 0; n < carCount; n++) {
+				const to = LANES[laneOf[n]!]!.z;
+				const was = across[n]!;
+				across[n] = to + (was - to) * Math.exp(-dt * drivers[n]!.swerve);
+				drift[n] = dt > 0 ? (across[n]! - was) / dt : 0;
+			}
 		}
 
 		function traffic(t: number) {
@@ -432,13 +616,15 @@
 					const n = l * perLane + i;
 					const along = ((travelled[n]! % SPAN) + SPAN) % SPAN;
 					const x = lane.way > 0 ? along - TRAFFIC_REACH : TRAFFIC_REACH - along;
-					const z = lane.z;
+					const z = across[n]!;
+					// Nosing the way it's swerving
+					const yaw = -Math.atan2(drift[n]!, lane.way * Math.max(pace[n]!, 4));
 					const y = deckY(x) + 0.1;
 					const slope = Math.atan2(deckY(x + 1) - deckY(x - 1), 2);
 					const gone = taken.has(n);
 					carSpot.set([x, y, z], n * 3);
 					dummy.position.set(x, y, z);
-					dummy.rotation.set(0, lane.way > 0 ? 0 : Math.PI, lane.way > 0 ? slope : -slope);
+					dummy.rotation.set(0, yaw, lane.way > 0 ? slope : -slope);
 					dummy.scale.setScalar(gone ? 0 : 1);
 					dummy.updateMatrix();
 					cars.setMatrixAt(n, dummy.matrix);
@@ -982,14 +1168,19 @@
 			vehicle.spin.set((Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 6);
 			vehicle.state = 'falling';
 			// Never back onto the bridge: let go above the deck, it's given just enough sideways
-			// speed, out towards the viewer, to clear the edge on its way down
+			// speed to clear the edge on its way down, out towards the viewer, or over the far
+			// side when it's already headed that way
 			const p = vehicle.mesh.position;
 			const { velocity } = vehicle;
 			if (overDeck(p) && p.y > deckY(p.x)) {
 				const drop = p.y - deckY(p.x) + 3;
 				const fall = (velocity.y + Math.sqrt(velocity.y ** 2 + 2 * GRAVITY * drop)) / GRAVITY;
-				const needed = (DECK_HALF + 4 - p.z) / Math.max(fall, 0.25);
-				velocity.z = Math.max(velocity.z, Math.min(needed, 70));
+				const time = Math.max(fall, 0.25);
+				if (velocity.z < 0) {
+					velocity.z = Math.min(velocity.z, -Math.min((DECK_HALF + 4 + p.z) / time, 70));
+				} else {
+					velocity.z = Math.max(velocity.z, Math.min((DECK_HALF + 4 - p.z) / time, 70));
+				}
 			}
 			// With reduced motion it's gone at once, to the bottom
 			if (still) remove(vehicle);
@@ -1788,9 +1979,80 @@
 		const FLING_WINDOW = 100;
 		let swing: { at: number; p: THREE.Vector3 }[] = [];
 
+		// Swiping through the traffic: pressed down away from any vehicle and dragged across, every
+		// one the pointer passes over is batted up into the air, the way the swipe went
+		let sweeping = false;
+		let sweep: { at: number; x: number; y: number }[] = [];
+
+		// The vehicles within reach of the stretch of screen the pointer just crossed
+		function crossed(a: Spot, b: Spot) {
+			const r = host.getBoundingClientRect();
+			const reach = (b.pointerType === 'touch' ? 28 : 16) ** 2;
+			const ax = a.clientX - r.left;
+			const ay = a.clientY - r.top;
+			const bx = b.clientX - r.left - ax;
+			const by = b.clientY - r.top - ay;
+			const length = bx * bx + by * by || 1;
+			const hits: number[] = [];
+			const look = (spots: Float32Array, count: number, offset: number) => {
+				for (let i = 0; i < count; i++) {
+					if (taken.has(offset + i)) continue;
+					onScreen.fromArray(spots, i * 3);
+					onScreen.y += 1;
+					onScreen.project(camera);
+					if (onScreen.z > 1) continue;
+					const x = ((onScreen.x + 1) / 2) * r.width - ax;
+					const y = ((1 - onScreen.y) / 2) * r.height - ay;
+					const t = THREE.MathUtils.clamp((x * bx + y * by) / length, 0, 1);
+					const dx = x - t * bx;
+					const dy = y - t * by;
+					if (dx * dx + dy * dy < reach) hits.push(offset + i);
+				}
+			};
+			look(carSpot, carCount, 0);
+			look(bikeSpot, BIKES, carCount);
+			return hits;
+		}
+
+		function swipe(event: PointerEvent) {
+			const now = performance.now();
+			const last = sweep[sweep.length - 1]!;
+			const hits = crossed(
+				{ clientX: last.x, clientY: last.y, pointerType: event.pointerType },
+				event
+			);
+			sweep.push({ at: now, x: event.clientX, y: event.clientY });
+			while (sweep.length > 2 && now - sweep[1]!.at > FLING_WINDOW) sweep.shift();
+			const first = sweep[0]!;
+			const span = Math.max(FLING_WINDOW / 2, now - first.at) / 1000;
+			// How fast the pointer's going across the screen, in pixels a second
+			const speed = Math.hypot(event.clientX - first.x, event.clientY - first.y) / span;
+			const force = Math.min(1, speed / 3000);
+			for (const id of hits) {
+				const vehicle = lift(id);
+				// Not the way it's swiped: something huge is tearing along under the deck, and every
+				// vehicle over it bursts straight up and is thrown out over the side it was on,
+				// tumbling, the faster the swipe the higher
+				const side = Math.sign(vehicle.mesh.position.z) || 1;
+				vehicle.velocity.set(
+					(Math.random() - 0.5) * 8,
+					34 + force * 30 + Math.random() * 14,
+					side * (8 + Math.random() * 14)
+				);
+				release(vehicle);
+				vehicle.spin.multiplyScalar(2 + force * 2);
+			}
+		}
+
 		function down(event: PointerEvent) {
 			const id = nearest(event);
-			if (id === null) return;
+			if (id === null) {
+				if (event.pointerType === 'mouse' && event.button !== 0) return;
+				sweeping = true;
+				sweep = [{ at: performance.now(), x: event.clientX, y: event.clientY }];
+				host.setPointerCapture(event.pointerId);
+				return;
+			}
 			event.preventDefault();
 			held = lift(id);
 			// Carried along and above its own line across the bridge, so it can be dropped back
@@ -1803,6 +2065,10 @@
 		}
 
 		function move(event: PointerEvent) {
+			if (sweeping) {
+				swipe(event);
+				return;
+			}
 			if (!held) {
 				host.style.cursor = event.pointerType === 'mouse' && nearest(event) !== null ? 'grab' : '';
 				return;
@@ -1829,6 +2095,7 @@
 		}
 
 		function up() {
+			sweeping = false;
 			if (!held) return;
 			// Held still before letting go: it drops rather than flies
 			if (performance.now() - moved > 120) held.velocity.set(0, 0, 0);
@@ -1999,6 +2266,7 @@
 			renderer.render(scene, tall);
 			if (!drawn) {
 				drawn = true;
+				shown = true;
 				onready?.();
 			}
 		}
@@ -2031,6 +2299,7 @@
 
 <div
 	class="scene"
+	class:shown
 	bind:this={host}
 	role="button"
 	tabindex="0"
@@ -2063,6 +2332,10 @@
 		display: block;
 		/* The page's links stay clickable under the bridge's canvas */
 		pointer-events: none;
+	}
+
+	.scene:not(.shown) canvas {
+		visibility: hidden;
 	}
 
 	/* Feathered on every side, so the sea melts into the page's sky */
