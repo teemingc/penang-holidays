@@ -1,35 +1,39 @@
-import data from '../data/holidays.json' with { type: 'json' };
 import type { YearHolidays } from './parse.ts';
 
-const years = data as YearHolidays[];
+export interface Env {
+	/** Static assets binding serving the `data/` directory */
+	ASSETS: { fetch(input: string): Promise<Response> };
+}
 
-const HEADERS = {
-	'access-control-allow-origin': '*',
-	'cache-control': 'public, max-age=86400'
-};
+// Holidays rarely change, so browsers can reuse a successful response for a day.
+// Errors aren't cached, so a year that gets published shows up straight away.
+const CACHE_CONTROL = 'public, max-age=86400';
 
 export default {
-	fetch(request: Request): Response {
+	async fetch(request: Request, env: Env): Promise<Response> {
 		if (request.method !== 'GET' && request.method !== 'HEAD') {
 			return json({ error: 'Method not allowed' }, 405);
 		}
 
 		const segments = new URL(request.url).pathname.split('/').filter(Boolean);
+		const [yearSegment, monthSegment, ...rest] = segments;
 
-		if (segments.length === 0) {
-			return json({ years: years.map((y) => y.year) });
+		if (yearSegment === undefined) {
+			return json({ years: await asset<number[]>(env, 'years.json') });
 		}
 
-		const [yearSegment, monthSegment, ...rest] = segments;
-		const year = years.find((y) => String(y.year) === yearSegment);
-
-		if (rest.length > 0 || !/^\d{4}$/.test(yearSegment!)) {
+		if (rest.length > 0 || !/^\d{4}$/.test(yearSegment)) {
 			return json({ error: 'Use /{year} or /{year}/{month}, e.g. /2026 or /2026/3' }, 404);
 		}
 
+		const year = await asset<YearHolidays>(env, `${yearSegment}.json`);
+
 		if (!year) {
 			return json(
-				{ error: `${yearSegment} is not available`, years: years.map((y) => y.year) },
+				{
+					error: `${yearSegment} is not available`,
+					years: await asset<number[]>(env, 'years.json')
+				},
 				404
 			);
 		}
@@ -52,6 +56,18 @@ export default {
 	}
 };
 
+async function asset<T>(env: Env, file: string): Promise<T | null> {
+	// The assets binding only uses the URL's path
+	const response = await env.ASSETS.fetch(`https://assets.local/${file}`);
+	return response.ok ? response.json() : null;
+}
+
 function json(body: unknown, status = 200): Response {
-	return Response.json(body, { status, headers: HEADERS });
+	return Response.json(body, {
+		status,
+		headers: {
+			'access-control-allow-origin': '*',
+			'cache-control': status === 200 ? CACHE_CONTROL : 'no-store'
+		}
+	});
 }

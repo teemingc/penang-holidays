@@ -7,7 +7,7 @@ The data is exactly what the portal lists. It does not add replacement days the 
 ## Data
 
 - [`data/{year}.json`](data): one file per year, e.g. [`data/2026.json`](data/2026.json)
-- [`data/holidays.json`](data/holidays.json): every year in one file
+- [`data/years.json`](data/years.json): the years available, e.g. `[2023, 2024, 2025, 2026]`
 
 ```json
 {
@@ -35,7 +35,7 @@ Two holidays can share a date, e.g. 7 July 2024.
 
 ## API
 
-A Cloudflare Worker serves the same data:
+A Cloudflare Worker serves the same data, reading `data/` as static assets:
 
 | Request       | Response                                |
 | ------------- | --------------------------------------- |

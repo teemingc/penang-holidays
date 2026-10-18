@@ -1,5 +1,5 @@
-import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { parseHolidayPage, type YearHolidays } from './parse.ts';
+import { readdir, writeFile } from 'node:fs/promises';
+import { parseHolidayPage } from './parse.ts';
 
 const SOURCE_URL = 'https://www.penang.gov.my/index.php/component/sppagebuilder/page/50';
 const DATA_DIR = new URL('../data/', import.meta.url);
@@ -28,15 +28,14 @@ for (const year of years) {
 	console.log(`data/${year.year}.json: ${year.holidays.length} holidays`);
 }
 
-// Years drop off the portal after a while, so rebuild the combined file from every file on disk
-const all: YearHolidays[] = [];
-for (const file of (await readdir(DATA_DIR)).sort()) {
-	if (/^\d{4}\.json$/.test(file)) {
-		all.push(JSON.parse(await readFile(new URL(file, DATA_DIR), 'utf8')));
-	}
-}
-await writeJson('holidays.json', all);
-console.log(`data/holidays.json: ${all.map((y) => y.year).join(', ')}`);
+// The Worker can't list its static assets, so it reads the available years from this index.
+// Years drop off the portal after a while, so build it from every file on disk.
+const available = (await readdir(DATA_DIR))
+	.filter((file) => /^\d{4}\.json$/.test(file))
+	.map((file) => Number(file.slice(0, 4)))
+	.sort((a, b) => a - b);
+await writeJson('years.json', available);
+console.log(`data/years.json: ${available.join(', ')}`);
 
 // The portal is slow and drops connections now and then, so retry a few times
 async function fetchPage(attempts = 4): Promise<string> {

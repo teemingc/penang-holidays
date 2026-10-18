@@ -1,11 +1,35 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import worker from '../src/worker.ts';
+import worker, { type Env } from '../src/worker.ts';
+
+// Stands in for Cloudflare's static assets binding, serving the real data/ directory
+const env: Env = {
+	ASSETS: {
+		async fetch(input) {
+			const file = new URL(`../data${new URL(input).pathname}`, import.meta.url);
+			try {
+				return new Response(await readFile(file));
+			} catch {
+				return new Response('Not found', { status: 404 });
+			}
+		}
+	}
+};
 
 async function get(path: string) {
-	const response = worker.fetch(new Request(`https://example.com${path}`));
-	return { status: response.status, body: await response.json() };
+	const response = await worker.fetch(new Request(`https://example.com${path}`), env);
+	return {
+		status: response.status,
+		cacheControl: response.headers.get('cache-control'),
+		body: await response.json()
+	};
 }
+
+test('caches successful responses but not errors', async () => {
+	assert.equal((await get('/2026')).cacheControl, 'public, max-age=86400');
+	assert.equal((await get('/1999')).cacheControl, 'no-store');
+});
 
 test('lists available years', async () => {
 	const { status, body } = await get('/');
