@@ -45,14 +45,22 @@
 		copiedTimer = setTimeout(() => (copied = false), 1600);
 	}
 
+	// A random character of the same kind, so letters stay letters and digits stay digits
+	function glitch(c: string) {
+		if (/\d/.test(c)) return String(Math.floor(Math.random() * 10));
+		const letter = String.fromCharCode(97 + Math.floor(Math.random() * 26));
+		return c === c.toUpperCase() ? letter.toUpperCase() : letter;
+	}
+
 	// Which send is the latest: an older one still streaming in stops when a new one starts
 	let run = 0;
 
 	async function send() {
 		if (stage === 'sending') return;
 		const id = ++run;
+		// Sent before: the last response stays put until the new one replaces it
+		const first = !shown;
 		stage = 'sending';
-		shown = '';
 		const started = performance.now();
 		const request = fetch(path)
 			.then(async (res) => {
@@ -81,11 +89,29 @@
 		const body = await request;
 		stage = 'done';
 
-		// The response streams in, a little at a time
 		if (reducedMotion) {
 			shown = body;
 			return;
 		}
+
+		// Sent again: the response glitches through random characters and settles back into place,
+		// left to right, without anything moving. true, false and null stay as they are, so no colour
+		// changes with them
+		if (!first) {
+			const settle = [...body].map((_, i) => (i / body.length) * 200 + Math.random() * 100);
+			const started = performance.now();
+			for (let t = 0; t < 300; t = performance.now() - started) {
+				shown = body.replace(/\b(?:true|false|null)\b|[a-z0-9]/gi, (c, i) =>
+					c.length > 1 || t >= (settle[i] ?? 0) ? c : glitch(c)
+				);
+				await wait(32);
+				if (id !== run) return;
+			}
+			shown = body;
+			return;
+		}
+
+		// The first response streams in, a little at a time
 		for (let i = 0; i <= body.length; i += 24) {
 			shown = body.slice(0, i);
 			await wait(16);
@@ -175,7 +201,7 @@
 	<!-- Always there, so the page doesn't shift when the response arrives: until then, a faint
 	     preview of it -->
 	<div class="terminal">
-		{#if stage === 'done'}
+		{#if status}
 			<p class="status">
 				<span>{status}</span>
 				<span class="time">{elapsed} ms</span>
