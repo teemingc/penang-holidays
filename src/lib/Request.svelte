@@ -26,7 +26,7 @@
       "date": string,  // YYYY-MM-DD
       "name": string,  // in Malay
       "type": "federal" | "state",
-      "tentative": boolean  // may change
+      "tentative": boolean  // date may move
     }
   ],
   "month": number      // 1 to 12
@@ -254,26 +254,38 @@
 		</div>
 	</div>
 
-	<!-- Send heads the response it brings back, the status lands beside it, and the docs can be
-	     read again from the far end. The labels never change, so nothing on the row moves -->
+	<!-- One key heads the column: Send while the docs are up, Read docs once the response is.
+	     Both labels share its place, as wide as the longer, and swap there, so nothing on the row
+	     moves when they do or when the status lands beside them -->
 	<div class="bar">
-		<button class="send" onclick={send} disabled={stage === 'sending'}>
-			<span class="return" aria-hidden="true">↵</span>
-			Send request
+		<button
+			class="send"
+			onclick={view === 'docs' ? send : readDocs}
+			disabled={stage === 'sending'}
+			aria-label={view === 'docs' ? 'Send request' : 'Read docs'}
+		>
+			<span class="label" class:gone={view !== 'docs'} aria-hidden="true">
+				<span class="keycap">↵</span>
+				Send request
+			</span>
+			<span class="label" class:gone={view === 'docs'} aria-hidden="true">
+				<!-- An open book, drawn in the same hairline as the copy icon -->
+				<span class="keycap">
+					<svg class="book" viewBox="0 0 16 16">
+						<path
+							d="M8 4.25C6.5 3.1 4.5 2.8 2.5 3v9.25c2-.2 4 .1 5.5 1.25 1.5-1.15 3.5-1.45 5.5-1.25V3c-2-.2-4 .1-5.5 1.25Z"
+						/>
+						<path d="M8 4.25v9.25" />
+					</svg>
+				</span>
+				Read docs
+			</span>
 		</button>
 		{#if shownStatus}
 			<p class="status" in:fade={{ duration: reducedMotion ? 0 : 180 }}>
 				<span>{shownStatus}</span>
 				<span class="time">{shownTime}</span>
 			</p>
-		{/if}
-		{#if view === 'response'}
-			<button
-				class="docs"
-				onclick={readDocs}
-				disabled={stage === 'sending'}
-				in:fade={{ duration: reducedMotion ? 0 : 180 }}>Read docs</button
-			>
 		{/if}
 	</div>
 
@@ -430,9 +442,7 @@
 	}
 
 	.send {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.625rem;
+		display: inline-grid;
 		background: none;
 		color: var(--accent);
 		font-size: 0.8125rem;
@@ -440,7 +450,35 @@
 		line-height: 1;
 	}
 
-	.return {
+	/* The labels swap with the same short crossfade and blur as the copy icon, no movement */
+	.label {
+		grid-area: 1 / 1;
+		justify-self: start;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.625rem;
+		transition:
+			opacity 0.18s ease-out,
+			filter 0.18s ease-out;
+	}
+
+	.label.gone {
+		opacity: 0;
+		filter: blur(2px);
+		pointer-events: none;
+	}
+
+	.book {
+		width: 0.875rem;
+		height: 0.875rem;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.4;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.keycap {
 		display: inline-grid;
 		place-items: center;
 		width: 1.75rem;
@@ -456,7 +494,7 @@
 			background-color 0.15s ease-out;
 	}
 
-	.send:hover .return {
+	.send:hover .keycap {
 		border-color: color-mix(in srgb, var(--ink) 60%, transparent);
 		background: color-mix(in srgb, var(--ink) 8%, transparent);
 	}
@@ -466,29 +504,9 @@
 		transform: none;
 	}
 
-	.send:active:not(:disabled) .return {
+	.send:active:not(:disabled) .keycap {
 		border-bottom-width: 1px;
 		translate: 0 1px;
-	}
-
-	/* Quieter than Send, at the far end of its row */
-	.docs {
-		margin-left: auto;
-		background: none;
-		color: var(--ink-soft);
-		font-size: 0.75rem;
-		text-decoration: underline;
-		text-decoration-thickness: 1px;
-		text-underline-offset: 0.25em;
-	}
-
-	.docs:hover {
-		color: var(--ink);
-	}
-
-	.docs:disabled {
-		cursor: default;
-		opacity: 0.5;
 	}
 
 	.send:disabled {
@@ -498,7 +516,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.icon {
+		.icon,
+		.label {
 			transition: none;
 		}
 
