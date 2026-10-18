@@ -1901,6 +1901,17 @@
 				: '';
 		}
 
+		// Flicked with a finger, the flag is blown about as by a car flying close by, away from
+		// the side it was flicked on
+		function flick(event: PointerEvent) {
+			if (still || !flag) return;
+			if (event.pointerType === 'mouse' && event.button !== 0) return;
+			const cloth = flag.getBoundingClientRect();
+			gust = Math.max(gust, 0.9);
+			gustWay = event.clientX < cloth.left + cloth.width / 2 ? 1 : -1;
+		}
+		flag?.addEventListener('pointerdown', flick);
+
 		// The disturbance spreads a little and, slowly, fades back to calm, in steady steps of a
 		// thirtieth of a second however fast the screen draws: slow enough that nobody can tell
 		const SETTLE_STEP = 1 / 30;
@@ -2341,6 +2352,7 @@
 			host.removeEventListener('pointerup', up);
 			host.removeEventListener('pointercancel', up);
 			renderer.dispose();
+			flag?.removeEventListener('pointerdown', flick);
 			gust = flapping = 0;
 			if (flag) flag.style.transform = '';
 			for (const animation of flagAnimations) animation.updatePlaybackRate(1);

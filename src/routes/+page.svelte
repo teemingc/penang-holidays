@@ -280,6 +280,9 @@
 		vertical-align: -0.02em;
 		/* A gust from a passing car leans it from the hoist; see Scene.svelte */
 		transform-origin: left center;
+		/* It can be flicked, too */
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	/* Everything here animates only transform and opacity, which the browser can do without
