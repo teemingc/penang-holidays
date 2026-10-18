@@ -41,7 +41,10 @@
 	</dl>
 
 	<h2>Response</h2>
-	<p>The first two holidays of <code>GET /{latest}</code>:</p>
+	<p>
+		The full response of <code>GET /{latest}/3</code>. <code>GET /{latest}</code> has the same
+		shape, without <code>month</code>.
+	</p>
 	<pre><code>{JSON.stringify(data.example, null, 2)}</code></pre>
 
 	<ul>

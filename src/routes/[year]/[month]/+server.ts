@@ -1,4 +1,4 @@
-import { getYear, json, yearNotFound } from '#lib/holidays.js';
+import { getYear, inMonth, json, yearNotFound } from '#lib/holidays.js';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ params }) => {
@@ -10,10 +10,5 @@ export const GET: RequestHandler = ({ params }) => {
 		return json({ error: 'Month must be between 1 and 12' }, 400);
 	}
 
-	const prefix = `${year.year}-${String(month).padStart(2, '0')}-`;
-	return json({
-		...year,
-		month,
-		holidays: year.holidays.filter((h) => h.date.startsWith(prefix))
-	});
+	return json(inMonth(year, month));
 };

@@ -26,6 +26,12 @@ export function getYear(param: string): YearHolidays | undefined {
 	return years.find((y) => String(y.year) === param);
 }
 
+/** The body of `GET /{year}/{month}` */
+export function inMonth(year: YearHolidays, month: number) {
+	const prefix = `${year.year}-${String(month).padStart(2, '0')}-`;
+	return { ...year, month, holidays: year.holidays.filter((h) => h.date.startsWith(prefix)) };
+}
+
 export function yearNotFound(param: string): Response {
 	if (!/^\d{4}$/.test(param)) {
 		return json({ error: 'Use /{year} or /{year}/{month}, e.g. /2026 or /2026/3' }, 404);

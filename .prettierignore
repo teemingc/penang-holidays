@@ -1,5 +1,4 @@
 pnpm-lock.yaml
 scripts/fixtures
 data
-worker-configuration.d.ts
 /static/
