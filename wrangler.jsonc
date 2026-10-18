@@ -1,8 +1,9 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "penang-holidays",
-	"main": "src/worker.ts",
+	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_als"],
 	// Serve the Worker at penang-holidays.<subdomain>.workers.dev
 	"workers_dev": true,
 	// Serve repeat requests from Cloudflare's cache without running the Worker, for as long as
@@ -11,9 +12,7 @@
 		"enabled": true
 	},
 	"assets": {
-		"directory": "./data",
 		"binding": "ASSETS",
-		// Route every request through the Worker so the API has one consistent shape
-		"run_worker_first": true
+		"directory": ".svelte-kit/cloudflare"
 	}
 }

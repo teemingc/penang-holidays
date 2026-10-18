@@ -1,4 +1,4 @@
-import { readdir, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { parseHolidayPage } from './parse.ts';
 
 const SOURCE_URL = 'https://www.penang.gov.my/index.php/component/sppagebuilder/page/50';
@@ -27,15 +27,6 @@ for (const year of years) {
 	await writeJson(`${year.year}.json`, year);
 	console.log(`data/${year.year}.json: ${year.holidays.length} holidays`);
 }
-
-// The Worker can't list its static assets, so it reads the available years from this index.
-// Years drop off the portal after a while, so build it from every file on disk.
-const available = (await readdir(DATA_DIR))
-	.filter((file) => /^\d{4}\.json$/.test(file))
-	.map((file) => Number(file.slice(0, 4)))
-	.sort((a, b) => a - b);
-await writeJson('years.json', available);
-console.log(`data/years.json: ${available.join(', ')}`);
 
 // The portal is slow and drops connections now and then, so retry a few times
 async function fetchPage(attempts = 4): Promise<string> {

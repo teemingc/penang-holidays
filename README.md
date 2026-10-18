@@ -6,8 +6,7 @@ The data is exactly what the portal lists. It does not add replacement days the 
 
 ## Data
 
-- [`data/{year}.json`](data): one file per year, e.g. [`data/2026.json`](data/2026.json)
-- [`data/years.json`](data/years.json): the years available, e.g. `[2023, 2024, 2025, 2026]`
+One file per year in [`data/`](data), e.g. [`data/2026.json`](data/2026.json):
 
 ```json
 {
@@ -35,11 +34,11 @@ Two holidays can share a date, e.g. 7 July 2024.
 
 ## API
 
-A Cloudflare Worker serves the same data, reading `data/` as static assets:
+A SvelteKit app on Cloudflare Workers serves the same data, bundled from `data/` at build time. Its home page explains the API.
 
 | Request       | Response                                |
 | ------------- | --------------------------------------- |
-| `GET /`       | `{ "years": [2023, 2024, 2025, 2026] }` |
+| `GET /years`  | `{ "years": [2023, 2024, 2025, 2026] }` |
 | `GET /2026`   | All holidays in 2026                    |
 | `GET /2026/3` | Holidays in March 2026                  |
 
@@ -59,11 +58,21 @@ pnpm scrape 2027     # only 2027; fails if it isn't published yet
 
 The portal only shows the last few years. Files for years that drop off are kept.
 
-## Deploying the Worker
+## Developing
 
-The Worker deploys through Cloudflare's Git integration (Workers Builds) on every push to `main`:
+```sh
+pnpm dev       # local dev server
+pnpm test
+pnpm build
+pnpm preview   # run the production build in the Workers runtime
+```
+
+## Deploying
+
+The app deploys through Cloudflare's Git integration (Workers Builds) on every push to `main`:
 
 1. In the Cloudflare dashboard, go to **Workers & Pages → Create → Import a repository** and pick this repository.
 2. Keep the project name as `penang-holidays` to match [`wrangler.jsonc`](wrangler.jsonc).
+3. Set the build command to `pnpm build` and the deploy command to `npx wrangler deploy`.
 
 To deploy manually instead, run `pnpm run deploy`.

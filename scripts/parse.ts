@@ -1,22 +1,5 @@
 import { parse, type HTMLElement } from 'node-html-parser';
-
-export type HolidayType = 'federal' | 'state';
-
-export interface Holiday {
-	/** ISO date, e.g. `2026-02-17` */
-	date: string;
-	/** Name as published on the portal, in Malay */
-	name: string;
-	type: HolidayType;
-	/** Marked `( * ) Tertakluk kepada perubahan` (subject to change) on the portal */
-	tentative: boolean;
-}
-
-export interface YearHolidays {
-	year: number;
-	source: string;
-	holidays: Holiday[];
-}
+import type { Holiday, HolidayType, YearHolidays } from '../src/lib/holidays.ts';
 
 const MONTHS = [
 	'januari',
