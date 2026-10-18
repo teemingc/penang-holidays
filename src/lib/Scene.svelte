@@ -1970,6 +1970,44 @@
 			return best;
 		}
 
+		// Whether a finger is on the bridge: between the deck's near and far edges on screen,
+		// where they pass under it, or within a fingertip of them
+		const edge = new THREE.Vector3();
+		function onBridge(event: Spot) {
+			const r = host.getBoundingClientRect();
+			const x = event.clientX - r.left;
+			const y = event.clientY - r.top;
+			const reach = 28;
+			const toScreen = (wx: number, z: number) => {
+				edge.set(wx, deckY(wx), z).project(camera);
+				return {
+					x: ((edge.x + 1) / 2) * r.width,
+					y: ((1 - edge.y) / 2) * r.height,
+					behind: edge.z > 1
+				};
+			};
+			let before: { near: ReturnType<typeof toScreen>; far: ReturnType<typeof toScreen> } | null =
+				null;
+			for (let wx = -REACH; wx <= REACH; wx += 25) {
+				const near = toScreen(wx, DECK_HALF);
+				const far = toScreen(wx, -DECK_HALF);
+				if (before && !near.behind && !before.near.behind) {
+					const lo = Math.min(before.near.x, near.x);
+					const hi = Math.max(before.near.x, near.x);
+					if (x >= lo && x <= hi) {
+						const t = (x - before.near.x) / (near.x - before.near.x || 1);
+						const top = before.far.y + (far.y - before.far.y) * t;
+						const bottom = before.near.y + (near.y - before.near.y) * t;
+						if (y >= Math.min(top, bottom) - reach && y <= Math.max(top, bottom) + reach) {
+							return true;
+						}
+					}
+				}
+				before = { near, far };
+			}
+			return false;
+		}
+
 		const grab = new THREE.Plane();
 		const skim = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1);
 		const target = new THREE.Vector3();
@@ -1979,8 +2017,8 @@
 		const FLING_WINDOW = 100;
 		let swing: { at: number; p: THREE.Vector3 }[] = [];
 
-		// Swiping through the traffic: pressed down away from any vehicle and dragged across, every
-		// one the pointer passes over is batted up into the air, the way the swipe went
+		// Swiping through the traffic: pressed down away from any vehicle, or carrying one, and
+		// dragged across, every one the pointer passes over is batted up into the air
 		let sweeping = false;
 		let sweep: { at: number; x: number; y: number }[] = [];
 
@@ -2067,6 +2105,8 @@
 			host.style.cursor = 'grabbing';
 			moved = performance.now();
 			swing = [{ at: moved, p: held.mesh.position.clone() }];
+			// Swung along the deck, it knocks the traffic it meets off the bridge
+			sweep = [{ at: moved, x: event.clientX, y: event.clientY }];
 		}
 
 		function move(event: PointerEvent) {
@@ -2097,6 +2137,7 @@
 			waft(held);
 			held.mesh.rotation.z = THREE.MathUtils.clamp(-held.velocity.x * 0.004, -0.5, 0.5);
 			moved = now;
+			swipe(event);
 		}
 
 		function up() {
@@ -2124,16 +2165,13 @@
 			release(vehicle);
 		};
 
-		// A finger that lands on a vehicle picks it up, and the page holds still for the drag;
-		// anywhere else, it scrolls as usual
+		// A finger that lands on the bridge or a vehicle on it holds the page still, to swipe
+		// through the traffic or pick something up; anywhere else, it scrolls as usual
 		function touchstart(event: TouchEvent) {
 			const touch = event.touches[0];
 			if (event.touches.length !== 1 || !touch) return;
-			if (
-				nearest({ clientX: touch.clientX, clientY: touch.clientY, pointerType: 'touch' }) !== null
-			) {
-				event.preventDefault();
-			}
+			const spot = { clientX: touch.clientX, clientY: touch.clientY, pointerType: 'touch' };
+			if (onBridge(spot) || nearest(spot) !== null) event.preventDefault();
 		}
 
 		host.addEventListener('touchstart', touchstart, { passive: false });
@@ -2320,7 +2358,8 @@
 		position: relative;
 		width: 100%;
 		height: 100%;
-		/* The page scrolls past the bridge; only a touch on a vehicle holds it still, to drag */
+		/* The page scrolls past the bridge; only a touch on the bridge holds it still, to swipe
+		   or drag */
 		touch-action: pan-y pinch-zoom;
 		-webkit-tap-highlight-color: transparent;
 	}
