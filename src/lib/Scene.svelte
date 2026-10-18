@@ -1984,7 +1984,8 @@
 		let sweeping = false;
 		let sweep: { at: number; x: number; y: number }[] = [];
 
-		// The vehicles within reach of the stretch of screen the pointer just crossed
+		// The vehicles within reach of the stretch of screen the pointer just crossed, and how
+		// close to its line each one was, from 1 right on it to 0 at the edge of reach
 		function crossed(a: Spot, b: Spot) {
 			const r = host.getBoundingClientRect();
 			const reach = (b.pointerType === 'touch' ? 28 : 16) ** 2;
@@ -1993,7 +1994,7 @@
 			const bx = b.clientX - r.left - ax;
 			const by = b.clientY - r.top - ay;
 			const length = bx * bx + by * by || 1;
-			const hits: number[] = [];
+			const hits: { id: number; close: number }[] = [];
 			const look = (spots: Float32Array, count: number, offset: number) => {
 				for (let i = 0; i < count; i++) {
 					if (taken.has(offset + i)) continue;
@@ -2006,7 +2007,8 @@
 					const t = THREE.MathUtils.clamp((x * bx + y * by) / length, 0, 1);
 					const dx = x - t * bx;
 					const dy = y - t * by;
-					if (dx * dx + dy * dy < reach) hits.push(offset + i);
+					const d = dx * dx + dy * dy;
+					if (d < reach) hits.push({ id: offset + i, close: 1 - Math.sqrt(d / reach) });
 				}
 			};
 			look(carSpot, carCount, 0);
@@ -2028,15 +2030,18 @@
 			// How fast the pointer's going across the screen, in pixels a second
 			const speed = Math.hypot(event.clientX - first.x, event.clientY - first.y) / span;
 			const force = Math.min(1, speed / 3000);
-			for (const id of hits) {
+			for (const { id, close } of hits) {
 				const vehicle = lift(id);
 				// Not the way it's swiped: something huge is tearing along under the deck, and every
 				// vehicle over it bursts straight up and is thrown out over the side it was on,
-				// tumbling, the faster the swipe the higher
+				// tumbling, the faster the swipe the higher. Right over it they go highest, off to
+				// the side much less, motorcycles being light the highest of all, and no two alike
 				const side = Math.sign(vehicle.mesh.position.z) || 1;
+				const light = id >= carCount ? 1.3 : 1;
+				const up = (46 + force * 34) * (0.7 + close * 0.5) * (0.75 + Math.random() * 0.75);
 				vehicle.velocity.set(
 					(Math.random() - 0.5) * 8,
-					34 + force * 30 + Math.random() * 14,
+					up * light,
 					side * (8 + Math.random() * 14)
 				);
 				release(vehicle);
