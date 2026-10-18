@@ -45,7 +45,7 @@ A Cloudflare Worker serves the same data:
 
 ## Updating
 
-The [Scrape workflow](.github/workflows/scrape.yml) runs every 1 December, and on demand from the Actions tab. It commits any new or changed JSON files and redeploys the Worker.
+The [Scrape workflow](.github/workflows/scrape.yml) runs every 1 December, and on demand from the Actions tab. It commits any new or changed JSON files, which redeploys the Worker.
 
 To run it locally (Node 24+):
 
@@ -59,8 +59,9 @@ The portal only shows the last few years. Files for years that drop off are kept
 
 ## Deploying the Worker
 
-1. Create a Cloudflare API token with the "Edit Cloudflare Workers" template.
-2. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository secrets.
-3. Run the Deploy workflow, or `pnpm run deploy` locally.
+The Worker deploys through Cloudflare's Git integration (Workers Builds) on every push to `main`:
 
-Without the secrets, the Deploy workflow skips the deploy.
+1. In the Cloudflare dashboard, go to **Workers & Pages → Create → Import a repository** and pick this repository.
+2. Keep the project name as `penang-holidays` to match [`wrangler.jsonc`](wrangler.jsonc).
+
+To deploy manually instead, run `pnpm run deploy`.
