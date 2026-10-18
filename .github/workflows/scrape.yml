@@ -1,0 +1,56 @@
+name: Scrape
+
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: Years to scrape, separated by spaces (leave empty for every year on the portal)
+        required: false
+        type: string
+  schedule:
+    # Once a year on 1 December, when the next year's holidays are usually gazetted
+    - cron: '0 1 1 12 *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scrape
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm scrape $YEARS
+        env:
+          YEARS: ${{ inputs.years }}
+      - run: pnpm test
+      - id: commit
+        run: |
+          if git diff --quiet -- data && [ -z "$(git ls-files --others --exclude-standard -- data)" ]; then
+            echo "No changes"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data
+          git commit -m "Update holidays: $(git diff --cached --name-only -- 'data/[0-9]*.json' | xargs -n1 basename | sed 's/.json//' | paste -sd, -)"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  # Pushes made with GITHUB_TOKEN don't trigger other workflows, so deploy from here
+  deploy:
+    needs: scrape
+    if: needs.scrape.outputs.changed == 'true'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

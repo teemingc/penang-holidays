@@ -1,0 +1,120 @@
+{
+	"year": 2023,
+	"source": "https://www.penang.gov.my/index.php/component/sppagebuilder/page/50",
+	"holidays": [
+		{
+			"date": "2023-01-01",
+			"name": "Tahun Baru 2023",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2023-01-22",
+			"name": "Tahun Baru Cina",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-01-23",
+			"name": "Tahun Baru Cina",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-02-05",
+			"name": "Hari Thaipusam",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2023-04-08",
+			"name": "Hari Nuzul Al-Quran",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2023-04-22",
+			"name": "Hari Raya Puasa",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2023-04-23",
+			"name": "Hari Raya Puasa",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2023-05-01",
+			"name": "Hari Pekerja",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-05-04",
+			"name": "Hari Wesak",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-06-05",
+			"name": "Hari Keputeraan Seri Paduka Baginda Yang di-Pertuan Agong",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-06-29",
+			"name": "Hari Raya Qurban",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2023-07-07",
+			"name": "Hari Ulang Tahun Perisytiharan Tapak Warisan Dunia",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2023-07-08",
+			"name": "Hari Jadi Tuan Yang Terutama Yang di-Pertua Negeri Pulau Pinang",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2023-07-19",
+			"name": "Awal Muharram (Maal Hijrah)",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-08-31",
+			"name": "Hari Kebangsaan",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-09-16",
+			"name": "Hari Malaysia",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-09-28",
+			"name": "Hari Keputeraan Nabi Muhamad S.A.W (Maulidur Rasul)",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-11-12",
+			"name": "Hari Deepavali",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2023-12-25",
+			"name": "Hari Krismas",
+			"type": "federal",
+			"tentative": false
+		}
+	]
+}

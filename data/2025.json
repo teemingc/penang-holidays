@@ -1,0 +1,120 @@
+{
+	"year": 2025,
+	"source": "https://www.penang.gov.my/index.php/component/sppagebuilder/page/50",
+	"holidays": [
+		{
+			"date": "2025-01-01",
+			"name": "Tahun Baru 2025",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2025-01-29",
+			"name": "Tahun Baru Cina",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-01-30",
+			"name": "Tahun Baru Cina",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-02-11",
+			"name": "Hari Thaipusam",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2025-03-18",
+			"name": "Hari Nuzul Al-Quran",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2025-03-31",
+			"name": "Hari Raya Puasa",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2025-04-01",
+			"name": "Hari Raya Puasa (Hari Kedua)",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2025-05-01",
+			"name": "Hari Pekerja",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-05-12",
+			"name": "Hari Wesak",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-06-02",
+			"name": "Hari Keputeraan Seri Paduka Baginda Yang di-Pertuan Agong",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-06-07",
+			"name": "Hari Raya Qurban",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2025-06-27",
+			"name": "Awal Muharram (Maal Hijrah)",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-07-07",
+			"name": "Hari Ulang Tahun Perisytiharan Tapak Warisan Dunia",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2025-07-12",
+			"name": "Hari Jadi Tuan Yang Terutama Yang di-Pertua Negeri Pulau Pinang",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2025-08-31",
+			"name": "Hari Kebangsaan",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-09-05",
+			"name": "Hari Keputeraan Nabi Muhamad S.A.W (Maulidur Rasul)",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-09-16",
+			"name": "Hari Malaysia",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2025-10-20",
+			"name": "Hari Deepavali",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2025-12-25",
+			"name": "Hari Krismas",
+			"type": "federal",
+			"tentative": false
+		}
+	]
+}

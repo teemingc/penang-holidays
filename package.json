@@ -1,0 +1,30 @@
+{
+	"name": "penang-holidays",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Penang public holidays scraped from the Penang state government portal, published as JSON.",
+	"license": "MIT",
+	"type": "module",
+	"packageManager": "pnpm@12.9.1",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"scrape": "node src/scrape.ts",
+		"test": "node --test \"test/**/*.test.ts\"",
+		"check": "tsc",
+		"format": "prettier --write .",
+		"lint": "prettier --check .",
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy"
+	},
+	"dependencies": {
+		"node-html-parser": "^9.0.4"
+	},
+	"devDependencies": {
+		"@types/node": "^26.6.5",
+		"prettier": "^3.9.10",
+		"typescript": "^7.0.2",
+		"wrangler": "^4.151.1"
+	}
+}

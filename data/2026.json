@@ -1,0 +1,126 @@
+{
+	"year": 2026,
+	"source": "https://www.penang.gov.my/index.php/component/sppagebuilder/page/50",
+	"holidays": [
+		{
+			"date": "2026-01-01",
+			"name": "Tahun Baru 2026",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2026-02-01",
+			"name": "Hari Thaipusam",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2026-02-17",
+			"name": "Tahun Baru Cina",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-02-18",
+			"name": "Tahun Baru Cina",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-03-07",
+			"name": "Hari Nuzul Al-Quran",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2026-03-21",
+			"name": "Hari Raya Puasa",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2026-03-22",
+			"name": "Hari Raya Puasa (Hari Kedua)",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2026-05-01",
+			"name": "Hari Pekerja",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-05-27",
+			"name": "Hari Raya Qurban",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2026-05-31",
+			"name": "Hari Wesak",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-06-01",
+			"name": "Hari Keputeraan Seri Paduka Baginda Yang di-Pertuan Agong",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-06-02",
+			"name": "Cuti Ganti Hari Wesak dan Hari Keputeraan Seri Paduka Baginda Yang di-Pertuan Agong",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-06-17",
+			"name": "Awal Muharram (Maal Hijrah)",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-07-07",
+			"name": "Hari Ulang Tahun Perisytiharan Tapak Warisan Dunia",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2026-07-11",
+			"name": "Hari Jadi Tuan Yang Terutama Yang di-Pertua Negeri Pulau Pinang",
+			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2026-08-25",
+			"name": "Hari Keputeraan Nabi Muhamad S.A.W (Maulidur Rasul)",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-08-31",
+			"name": "Hari Kebangsaan",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-09-16",
+			"name": "Hari Malaysia",
+			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-11-08",
+			"name": "Hari Deepavali",
+			"type": "federal",
+			"tentative": true
+		},
+		{
+			"date": "2026-12-25",
+			"name": "Hari Krismas",
+			"type": "federal",
+			"tentative": false
+		}
+	]
+}
