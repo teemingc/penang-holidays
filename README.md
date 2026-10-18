@@ -85,4 +85,4 @@ If you need more than Penang, the [holidays](https://github.com/vacanza/holidays
 
 ## Credits
 
-The Penang flag in [`src/lib/assets`](src/lib/assets) comes from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Flag_of_Penang_(Malaysia).svg) and is licensed [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The favicon is a squared-up version of it.
+The Penang flag in [`src/lib/assets`](src/lib/assets) comes from [Wikimedia Commons](<https://commons.wikimedia.org/wiki/File:Flag_of_Penang_(Malaysia).svg>) and is licensed [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The favicon is a squared-up version of it.
