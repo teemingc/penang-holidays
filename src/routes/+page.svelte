@@ -515,6 +515,17 @@
 			--drop: 0px;
 		}
 
+		/* Wider than a phone, the words keep to a column in the middle as wide as the title,
+		   so the request isn't left against one side with the screen empty beside it; the
+		   bridge still runs edge to edge */
+		header,
+		.request,
+		.github {
+			justify-self: center;
+			width: 100%;
+			max-width: 32rem;
+		}
+
 		/* Across the whole screen, so only its top edge is soft */
 		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page::before {
 			grid-column: 1 / -1;
@@ -522,9 +533,10 @@
 			mask-image: linear-gradient(var(--ease));
 		}
 
+		/* Hung from the same edge as everything above it */
 		.github {
 			align-self: end;
-			justify-content: center;
+			justify-content: flex-start;
 			padding-top: 1.5rem;
 		}
 	}
