@@ -4,28 +4,40 @@
 		path: string;
 		/** The full URL it's at, to show */
 		url: string;
-		/** What the request returns, shown faintly until it's sent */
-		preview: unknown;
-		/** The headers it comes with, as name and value */
+		/** The headers the response comes with, as name and value, shown until it's sent */
 		previewHeaders: [string, string][];
 		reducedMotion: boolean;
 	}
 
 	import { fade } from 'svelte/transition';
 
-	let { path, url, preview, previewHeaders, reducedMotion }: Props = $props();
+	let { path, url, previewHeaders, reducedMotion }: Props = $props();
 
 	// Shown as just the path; Copy gives the full URL
 	const endpoint = $derived(url.slice(new URL(url).origin.length));
 
+	// What each field of the response means, in the order they come, shown until the request's
+	// sent and again whenever they're asked for. Short enough to fit a phone without wrapping
+	const DOCS = `{
+  "year": number,
+  "source": string,    // where it's from
+  "holidays": [
+    {
+      "date": string,  // YYYY-MM-DD
+      "name": string,  // in Malay
+      "type": "federal" | "state",
+      "tentative": boolean  // may change
+    }
+  ],
+  "month": number      // 1 to 12
+}`;
+
 	let stage = $state<'idle' | 'sending' | 'done'>('idle');
+	// The docs, or the response to the last request
+	let view = $state<'docs' | 'response'>('docs');
 	let elapsed = $state(0);
 	let status = $state('');
 	let headers = $state<[string, string][]>([]);
-	let shown = $state('');
-	// The preview, until the first response has written over it, line by line
-	const example = $derived(JSON.stringify(preview, null, 2));
-	let rest = $state('');
 
 	// The headers worth showing, in this order
 	const SHOWN = ['content-type', 'cache-control', 'access-control-allow-origin'];
@@ -34,11 +46,14 @@
 			const value = get(name);
 			return value ? [[name, value] as [string, string]] : [];
 		});
+	// What the response comes with, shown with the docs
 	const exampleHeaders = $derived(
 		pick((name) => previewHeaders.find(([key]) => key === name)?.[1])
 	);
-	// The status line and headers as they're drawn, scrambling along with the body. The real values
-	// above are what's read out
+
+	// The body, status line and headers as they're drawn, scrambling as they change. The real
+	// values above are what's read out
+	let shown = $state(DOCS);
 	let shownStatus = $state('');
 	let shownTime = $state('');
 	let shownHeaders = $state<[string, string][]>([]);
@@ -85,18 +100,50 @@
 			);
 	}
 
-	// Which send is the latest: an older one still streaming in stops when a new one starts
+	// Which change is the latest: an older one still settling stops when a new one starts
 	let run = 0;
+
+	interface Drawn {
+		body: string;
+		status: string;
+		time: string;
+		headers: [string, string][];
+	}
+
+	// From the docs to the response, from one response to the next, or back to the docs: what's
+	// there glitches through random characters and settles on what's next, without anything moving
+	async function settle(next: Drawn, id: number) {
+		const show = () => {
+			shown = next.body;
+			shownStatus = next.status;
+			shownTime = next.time;
+			shownHeaders = next.headers;
+		};
+		if (reducedMotion) return show();
+		const scrambled = {
+			body: scrambler(next.body),
+			status: scrambler(next.status),
+			time: scrambler(next.time),
+			headers: next.headers.map(([name, value]) => [name, scrambler(value)] as const)
+		};
+		const started = performance.now();
+		for (let t = 0; t < 300; t = performance.now() - started) {
+			shown = scrambled.body(t);
+			shownStatus = scrambled.status(t);
+			shownTime = scrambled.time(t);
+			shownHeaders = scrambled.headers.map(([name, value]) => [name, value(t)]);
+			await wait(32);
+			if (id !== run) return;
+		}
+		show();
+	}
 
 	async function send() {
 		if (stage === 'sending') return;
 		const id = ++run;
-		// Sent before: the last response stays put until the new one replaces it
-		const first = !shown;
-		if (first) rest = example;
 		stage = 'sending';
 		const started = performance.now();
-		const request = fetch(path)
+		const body = await fetch(path)
 			.then(async (res) => {
 				elapsed = Math.round(performance.now() - started);
 				status = `${res.status} ${res.statusText || (res.ok ? 'OK' : '')}`.trim();
@@ -114,89 +161,39 @@
 				headers = [];
 				return 'The request didn’t get through. Check your connection and send it again.';
 			});
-
-		const body = await request;
 		stage = 'done';
-
-		const time = `${elapsed} ms`;
-		const show = () => {
-			rest = '';
-			shown = body;
-			shownStatus = status;
-			shownTime = time;
-			shownHeaders = headers;
-		};
-
-		if (reducedMotion) {
-			show();
-			return;
-		}
-
-		// Sent again: the status, headers and response glitch through random characters and settle
-		// back into place, without anything moving
-		if (!first) {
-			rest = '';
-			const scrambled = {
-				body: scrambler(body),
-				status: scrambler(status),
-				time: scrambler(time),
-				headers: headers.map(([name, value]) => [name, scrambler(value)] as const)
-			};
-			const started = performance.now();
-			for (let t = 0; t < 300; t = performance.now() - started) {
-				shown = scrambled.body(t);
-				shownStatus = scrambled.status(t);
-				shownTime = scrambled.time(t);
-				shownHeaders = scrambled.headers.map(([name, value]) => [name, value(t)]);
-				await wait(32);
-				if (id !== run) return;
-			}
-			show();
-			return;
-		}
-
-		shownStatus = status;
-		shownTime = time;
-		shownHeaders = headers;
-
-		// The first response writes over the preview from the top, a line at a time, so it reads as
-		// the faint example coming up to full strength, with nothing moving
-		// Half a second at most, however long the month
-		const lines = body.split('\n');
-		const before = example.split('\n');
-		const pace = Math.min(28, 500 / lines.length);
-		for (let n = 1; n <= lines.length; n++) {
-			shown = lines.slice(0, n).join('\n');
-			rest = before.length > n ? `\n${before.slice(n).join('\n')}` : '';
-			await wait(pace);
-			// Sent again while this one was still coming in: the new one takes over
-			if (id !== run) return;
-		}
-		show();
+		view = 'response';
+		await settle({ body, status, time: `${elapsed} ms`, headers }, id);
 	}
 
-	// The JSON, split into keys, strings, numbers and the rest, to colour each
+	function readDocs() {
+		stage = 'idle';
+		view = 'docs';
+		settle({ body: DOCS, status: '', time: '', headers: exampleHeaders }, ++run);
+	}
+
+	// The JSON, split into comments, keys, strings, numbers and the rest, to colour each
 	function tokenize(text: string) {
 		return [
 			...text.matchAll(
-				/("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?)|[^"\w-]+|\w+|-/g
+				/(\/\/[^\n]*)|("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?)|[^"\w/-]+|\w+|[-/]/g
 			)
 		].map((m) =>
-			m[1] && m[2]
-				? { text: m[1], kind: 'key', rest: m[2] }
-				: m[1]
-					? { text: m[1], kind: 'string', rest: '' }
-					: m[3]
-						? { text: m[3], kind: 'literal', rest: '' }
+			m[1]
+				? { text: m[1], kind: 'comment', rest: '' }
+				: m[2] && m[3]
+					? { text: m[2], kind: 'key', rest: m[3] }
+					: m[2]
+						? { text: m[2], kind: 'string', rest: '' }
 						: m[4]
-							? { text: m[4], kind: 'number', rest: '' }
-							: { text: m[0], kind: '', rest: '' }
+							? { text: m[4], kind: 'literal', rest: '' }
+							: m[5]
+								? { text: m[5], kind: 'number', rest: '' }
+								: { text: m[0], kind: '', rest: '' }
 		);
 	}
 
 	const tokens = $derived(tokenize(shown));
-	// What's left of the preview: all of it until it's sent
-	const ghost = $derived(tokenize(stage === 'idle' ? example : rest));
 </script>
 
 <div class="request">
@@ -257,8 +254,8 @@
 		</div>
 	</div>
 
-	<!-- Send heads the response it brings back, and the status lands beside it. The label never
-	     changes, so nothing on the row moves -->
+	<!-- Send heads the response it brings back, the status lands beside it, and the docs can be
+	     read again from the far end. The labels never change, so nothing on the row moves -->
 	<div class="bar">
 		<button class="send" onclick={send} disabled={stage === 'sending'}>
 			<span class="return" aria-hidden="true">↵</span>
@@ -270,23 +267,30 @@
 				<span class="time">{shownTime}</span>
 			</p>
 		{/if}
+		{#if view === 'response'}
+			<button
+				class="docs"
+				onclick={readDocs}
+				disabled={stage === 'sending'}
+				in:fade={{ duration: reducedMotion ? 0 : 180 }}>Read docs</button
+			>
+		{/if}
 	</div>
 
-	<!-- Always there, so the page doesn't shift when the response arrives: until then, a faint
-	     preview of it -->
+	<!-- Always there, so the page doesn't shift when the response arrives: until then, the docs -->
 	{#snippet json(tokens: ReturnType<typeof tokenize>)}{#each tokens as token, i (i)}<span
 				class={token.kind}>{token.text}</span
 			>{token.rest}{/each}{/snippet}
 
-	<div class="terminal" class:waiting={stage !== 'idle'}>
-		<!-- The preview, headers and all, fades back while it's on its way, and the response writes
-		     over it from the top, so nothing moves -->
+	<!-- Fading back while the request's on its way, until the response glitches in over it -->
+	<div class="terminal" class:waiting={stage === 'sending'}>
+		<!-- With the docs, the headers the response comes with, a little fainter -->
 		<div class="headers" class:ghost={!shownStatus}>
 			{#each shownStatus ? shownHeaders : exampleHeaders as [name, value] (name)}
 				<p class="header"><span>{name}:</span> {value}</p>
 			{/each}
 		</div>
-		<pre>{@render json(tokens)}<span class="ghost">{@render json(ghost)}</span></pre>
+		<pre>{@render json(tokens)}</pre>
 	</div>
 	<!-- Read out once when the response arrives, not as it streams in -->
 	<span class="visually-hidden" role="status"
@@ -467,6 +471,26 @@
 		translate: 0 1px;
 	}
 
+	/* Quieter than Send, at the far end of its row */
+	.docs {
+		margin-left: auto;
+		background: none;
+		color: var(--ink-soft);
+		font-size: 0.75rem;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 0.25em;
+	}
+
+	.docs:hover {
+		color: var(--ink);
+	}
+
+	.docs:disabled {
+		cursor: default;
+		opacity: 0.5;
+	}
+
 	.send:disabled {
 		cursor: default;
 		opacity: 0.5;
@@ -543,18 +567,27 @@
 	/* An example until it's sent: a little fainter than the real thing, still easy to read */
 	.ghost {
 		opacity: 0.9;
+	}
+
+	.headers,
+	pre {
 		transition: opacity 0.3s ease-out;
 	}
 
-	/* Sent, it falls back, so each line of the response stands out as it arrives over it */
-	.waiting .ghost {
+	.waiting .headers,
+	.waiting pre {
 		opacity: 0.35;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.ghost {
+		.headers,
+		pre {
 			transition: none;
 		}
+	}
+
+	.comment {
+		color: color-mix(in srgb, var(--ink-soft) 75%, transparent);
 	}
 
 	.string {

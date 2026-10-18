@@ -113,7 +113,6 @@
 		<Request
 			{path}
 			url={`${ORIGIN}/${data.year}/${data.month}`}
-			preview={data.preview}
 			previewHeaders={data.previewHeaders}
 			reducedMotion={reducedMotion.current}
 		/>
