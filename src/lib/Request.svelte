@@ -15,6 +15,8 @@
 
 	// Shown as just the path; Copy gives the full URL
 	const endpoint = $derived(url.slice(new URL(url).origin.length));
+	// With the docs, the path says which parts are yours to choose; sent, it's the one requested
+	const TEMPLATE = '/{year}/{month}';
 
 	// What each field of the response means, in the order they come, shown until the request's
 	// sent and again whenever they're asked for. Short enough to fit a phone without wrapping
@@ -54,6 +56,7 @@
 	// The body, status line and headers as they're drawn, scrambling as they change. The real
 	// values above are what's read out
 	let shown = $state(DOCS);
+	let shownPath = $state(TEMPLATE);
 	let shownStatus = $state('');
 	let shownTime = $state('');
 	let shownHeaders = $state<[string, string][]>([]);
@@ -103,7 +106,24 @@
 	// Which change is the latest: an older one still settling stops when a new one starts
 	let run = 0;
 
+	// The same, for a path that may be longer or shorter than the one before: it grows or
+	// shrinks a character at a time as it settles, so the copy icon after it glides rather
+	// than jumps. The slashes and braces hold still
+	function morpher(from: string, to: string) {
+		const settle = [...to].map((_, i) => (i / to.length) * 200 + Math.random() * 100);
+		return (t: number) => {
+			const length = Math.round(from.length + (to.length - from.length) * Math.min(1, t / 300));
+			let text = '';
+			for (let i = 0; i < length; i++) {
+				const c = to[i] ?? from[i] ?? '';
+				text += t >= (settle[i] ?? Infinity) || !/[a-z0-9]/i.test(c) ? c : glitch(c);
+			}
+			return text;
+		};
+	}
+
 	interface Drawn {
+		path: string;
 		body: string;
 		status: string;
 		time: string;
@@ -114,6 +134,7 @@
 	// there glitches through random characters and settles on what's next, without anything moving
 	async function settle(next: Drawn, id: number) {
 		const show = () => {
+			shownPath = next.path;
 			shown = next.body;
 			shownStatus = next.status;
 			shownTime = next.time;
@@ -121,6 +142,7 @@
 		};
 		if (reducedMotion) return show();
 		const scrambled = {
+			path: morpher(shownPath, next.path),
 			body: scrambler(next.body),
 			status: scrambler(next.status),
 			time: scrambler(next.time),
@@ -128,6 +150,7 @@
 		};
 		const started = performance.now();
 		for (let t = 0; t < 300; t = performance.now() - started) {
+			shownPath = scrambled.path(t);
 			shown = scrambled.body(t);
 			shownStatus = scrambled.status(t);
 			shownTime = scrambled.time(t);
@@ -163,13 +186,13 @@
 			});
 		stage = 'done';
 		view = 'response';
-		await settle({ body, status, time: `${elapsed} ms`, headers }, id);
+		await settle({ path: endpoint, body, status, time: `${elapsed} ms`, headers }, id);
 	}
 
 	function readDocs() {
 		stage = 'idle';
 		view = 'docs';
-		settle({ body: DOCS, status: '', time: '', headers: exampleHeaders }, ++run);
+		settle({ path: TEMPLATE, body: DOCS, status: '', time: '', headers: exampleHeaders }, ++run);
 	}
 
 	// The JSON, split into comments, keys, strings, numbers and the rest, to colour each
@@ -198,7 +221,13 @@
 
 <div class="request">
 	{#snippet command()}
-		<code><span class="method">GET</span> {endpoint}</code>
+		<!-- The parts in braces are placeholders, quieter than the rest -->
+		<code
+			><span class="method">GET</span>
+			{#each shownPath.split(/(\{[^}]*\})/) as part, i (i)}<span class:slot={part.startsWith('{')}
+					>{part}</span
+				>{/each}</code
+		>
 	{/snippet}
 
 	<!-- The copy icon, or a tick once it's copied, each drawing centred in its box -->
@@ -367,6 +396,10 @@
 	.method {
 		font-weight: 600;
 		color: var(--accent);
+	}
+
+	.slot {
+		color: var(--ink-soft);
 	}
 
 	button {
