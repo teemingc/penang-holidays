@@ -334,6 +334,8 @@
 		min-height: 0;
 		margin: 0.5rem -2.5rem 0;
 		position: relative;
+		/* Sized by the page, never by what's in it, so the still can follow its shape */
+		container-type: size;
 	}
 
 	/* Framed as the scene is: its camera's field of view is set by the height, so the still is
@@ -357,6 +359,14 @@
 
 	:global(:root[data-sky='dusk']) .still {
 		background-image: var(--dusk);
+	}
+
+	/* Taller than it's wide, the scene's camera steps back from a 30° to a 46° field of view
+	   (src/lib/Scene.svelte), so the bridge shrinks by tan(15°) / tan(23°) about the middle */
+	@container (aspect-ratio < 1) {
+		.still {
+			background-size: auto 63.1%;
+		}
 	}
 
 	.still.ready {
