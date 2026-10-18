@@ -180,15 +180,15 @@
 		<code><span class="method">GET</span> {endpoint}</code>
 	{/snippet}
 
-	<!-- The copy icon, or a tick once it's copied -->
+	<!-- The copy icon, or a tick once it's copied, each drawing centred in its box -->
 	{#snippet icons()}
-		<svg class="icon" class:gone={copied} viewBox="0 0 16 16" aria-hidden="true">
+		<svg class="icon" class:gone={copied} viewBox="0 -0.5 16 16" aria-hidden="true">
 			<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
 			<path
 				d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"
 			/>
 		</svg>
-		<svg class="icon" class:gone={!copied} viewBox="0 0 16 16" aria-hidden="true">
+		<svg class="icon" class:gone={!copied} viewBox="0 0.375 16 16" aria-hidden="true">
 			<path d="m3 8.5 3.25 3.25L13 5" />
 		</svg>
 	{/snippet}
@@ -283,7 +283,7 @@
 
 	.command {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 0.625rem;
 		font-size: clamp(1.5rem, 2.3vw, 2rem);
 		line-height: 1.2;
@@ -309,12 +309,9 @@
 		position: absolute;
 	}
 
-	/* Trimmed to the height of its capitals, so the icon beside it centres on the letters rather
-	   than on a line box with room for descenders */
 	code {
 		color: var(--ink);
 		font: inherit;
-		text-box: trim-both cap alphabetic;
 	}
 
 	@media (max-width: 900px) {
@@ -352,6 +349,10 @@
 		place-items: center;
 		width: 1.75rem;
 		height: 1.75rem;
+		/* Centred on the capitals by hand, from IBM Plex Mono's metrics: an ascent of 1.02em
+		   and a descent of 0.27em in a 1.2em line put the baseline 0.975em down, and its
+		   capitals, 0.698em tall, are centred 0.626em down */
+		margin-top: calc(0.626em - 0.875rem);
 		border-radius: 0.375rem;
 		background: none;
 		color: var(--ink-soft);
