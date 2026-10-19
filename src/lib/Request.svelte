@@ -1,6 +1,6 @@
 <script lang="ts">
 	interface Props {
-		/** The path to request, such as /2026/7 */
+		/** The path to request, such as /2026 */
 		path: string;
 		/** The full URL it's at, to show */
 		url: string;
@@ -16,7 +16,7 @@
 	// Shown as just the path; Copy gives the full URL
 	const endpoint = $derived(url.slice(new URL(url).origin.length));
 	// With the docs, the path says which parts are yours to choose; sent, it's the one requested
-	const TEMPLATE = '/{year}/{month}';
+	const TEMPLATE = '/{year}';
 
 	// What each field of the response means, in the order they come, shown until the request's
 	// sent and again whenever they're asked for. Short enough to fit a phone without wrapping
@@ -214,6 +214,7 @@
 	}
 
 	const tokens = $derived(tokenize(shown));
+	const docsTokens = tokenize(DOCS);
 </script>
 
 <div class="request">
@@ -322,13 +323,24 @@
 
 	<!-- Fading back while the request's on its way, until the response glitches in over it -->
 	<div class="terminal" class:waiting={stage === 'sending'}>
-		<!-- With the docs, the headers the response comes with, a little fainter -->
-		<div class="headers" class:ghost={!shownStatus}>
-			{#each shownStatus ? shownHeaders : exampleHeaders as [name, value] (name)}
-				<p class="header"><span>{name}:</span> {value}</p>
-			{/each}
+		<!-- Unseen, the docs as they first show, to size the box by on a phone -->
+		<div class="fit" aria-hidden="true">
+			<div class="headers">
+				{#each exampleHeaders as [name, value] (name)}
+					<p class="header"><span>{name}:</span> {value}</p>
+				{/each}
+			</div>
+			<pre>{@render json(docsTokens)}</pre>
 		</div>
-		<pre>{@render json(tokens)}</pre>
+		<div class="scroll">
+			<!-- With the docs, the headers the response comes with, a little fainter -->
+			<div class="headers" class:ghost={!shownStatus}>
+				{#each shownStatus ? shownHeaders : exampleHeaders as [name, value] (name)}
+					<p class="header"><span>{name}:</span> {value}</p>
+				{/each}
+			</div>
+			<pre>{@render json(tokens)}</pre>
+		</div>
 	</div>
 	<!-- Read out once when the response arrives, not as it streams in -->
 	<span class="visually-hidden" role="status"
@@ -382,12 +394,6 @@
 	code {
 		color: var(--ink);
 		font: inherit;
-	}
-
-	@media (max-width: 900px) {
-		.terminal {
-			height: min(46vh, 26rem);
-		}
 	}
 
 	.method {
@@ -568,13 +574,12 @@
 	}
 
 	/* The response, streaming in as plain text, fading out where it scrolls */
-	/* The rest of the column on a wide screen; a fixed share of the screen on a phone */
+	/* The rest of the column on a wide screen */
 	.terminal {
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
 		min-height: 0;
-		overflow: auto;
 		mask-image: linear-gradient(#000 85%, transparent);
-		scrollbar-width: thin;
-		scrollbar-color: color-mix(in srgb, var(--ink) 25%, transparent) transparent;
 		color: var(--ink-soft);
 		font-size: 0.75rem;
 		line-height: 1.55;
@@ -582,6 +587,43 @@
 
 	.terminal p {
 		margin: 0;
+	}
+
+	.fit {
+		display: none;
+	}
+
+	.scroll {
+		min-height: 0;
+		overflow: auto;
+		scrollbar-width: thin;
+		scrollbar-color: color-mix(in srgb, var(--ink) 25%, transparent) transparent;
+	}
+
+	/* Stacked, as tall as the docs, so there's no gap under them and nothing moves when the
+	   response arrives: a longer one scrolls. The unseen copy sets the height, and the
+	   response, sized to contain nothing, fills it. The fade falls in the room left under the
+	   last line, which shows in full once it's scrolled to */
+	@media (max-width: 900px) {
+		.terminal {
+			grid-template-rows: auto;
+			mask-image: linear-gradient(#000 calc(100% - 1.5rem), transparent);
+		}
+
+		.fit,
+		.scroll {
+			grid-area: 1 / 1;
+			padding-bottom: 1.5rem;
+		}
+
+		.fit {
+			display: block;
+			visibility: hidden;
+		}
+
+		.scroll {
+			contain: size;
+		}
 	}
 
 	.status {

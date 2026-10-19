@@ -20,16 +20,12 @@ export function now(): Date {
 	return new Date(`${today}T${match[1]!.padStart(2, '0')}:${match[2]}:00+08:00`);
 }
 
-/**
- * The year and month it is in Penang at a given moment, or that month of the latest year when
- * its year isn't one of those available yet
- */
-export function currentMonth(date: Date, available: number[]): { year: number; month: number } {
-	const [year, month] = date
-		.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' })
-		.split('-')
-		.map(Number);
-	return { year: available.includes(year!) ? year! : available.at(-1)!, month: month! };
+/** The year it is in Penang at a given moment, or the latest available when it isn't one yet */
+export function currentYear(date: Date, available: number[]): number {
+	const year = Number(
+		date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).slice(0, 4)
+	);
+	return available.includes(year) ? year : available.at(-1)!;
 }
 
 export interface Sun {
