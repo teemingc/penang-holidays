@@ -8,9 +8,12 @@ export default defineConfig({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
 				runes: ({ filename }) =>
-					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
+					filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
+				// Lets components await data, such as what a remote function returns
+				experimental: { async: true }
 			},
-			adapter: adapter()
+			adapter: adapter(),
+			experimental: { remoteFunctions: true }
 		})
 	],
 	// A port of its own, so it never lands on another project's dev server

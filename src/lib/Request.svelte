@@ -9,6 +9,7 @@
 		reducedMotion: boolean;
 	}
 
+	import { onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
 
 	let { path, url, previewHeaders, reducedMotion }: Props = $props();
@@ -36,7 +37,7 @@
 	let view = $state<'docs' | 'response'>('docs');
 	let elapsed = $state(0);
 	let status = $state('');
-	let headers = $state<[string, string][]>([]);
+	let headers: [string, string][] = [];
 
 	// The headers worth showing, in this order
 	const SHOWN = ['content-type', 'cache-control', 'access-control-allow-origin'];
@@ -56,7 +57,8 @@
 	let shownPath = $state(TEMPLATE);
 	let shownStatus = $state('');
 	let shownTime = $state('');
-	let shownHeaders = $state<[string, string][]>([]);
+	// Replaced whole on every frame, never changed in place
+	let shownHeaders = $state.raw<[string, string][]>([]);
 
 	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -102,6 +104,12 @@
 
 	// Which change is the latest: an older one still settling stops when a new one starts
 	let run = 0;
+
+	// Gone from the page, nothing's left running: whatever's settling stops, and so does the tick
+	onDestroy(() => {
+		run++;
+		clearTimeout(copiedTimer);
+	});
 
 	// The same, for a path that may be longer or shorter than the one before: it grows or
 	// shrinks a character at a time as it settles, so the copy icon after it glides rather
@@ -222,21 +230,21 @@
 		<!-- The parts in braces are placeholders, quieter than the rest -->
 		<code
 			><span class="method">GET</span>
-			{#each shownPath.split(/(\{[^}]*\})/) as part, i (i)}<span class:slot={part.startsWith('{')}
-					>{part}</span
+			{#each shownPath.split(/(\{[^}]*\})/) as part, i (i)}<span
+					class={{ slot: part.startsWith('{') }}>{part}</span
 				>{/each}</code
 		>
 	{/snippet}
 
 	<!-- The copy icon, or a tick once it's copied, each drawing centred in its box -->
 	{#snippet icons()}
-		<svg class="icon" class:gone={copied} viewBox="0 -0.5 16 16" aria-hidden="true">
+		<svg class={['icon', { gone: copied }]} viewBox="0 -0.5 16 16" aria-hidden="true">
 			<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
 			<path
 				d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"
 			/>
 		</svg>
-		<svg class="icon" class:gone={!copied} viewBox="0 0.375 16 16" aria-hidden="true">
+		<svg class={['icon', { gone: !copied }]} viewBox="0 0.375 16 16" aria-hidden="true">
 			<path d="m3 8.5 3.25 3.25L13 5" />
 		</svg>
 	{/snippet}
@@ -291,11 +299,11 @@
 			disabled={stage === 'sending'}
 			aria-label={view === 'docs' ? 'Send request' : 'Read docs'}
 		>
-			<span class="label" class:gone={view !== 'docs'} aria-hidden="true">
+			<span class={['label', { gone: view !== 'docs' }]} aria-hidden="true">
 				<span class="keycap">↵</span>
 				Send request
 			</span>
-			<span class="label" class:gone={view === 'docs'} aria-hidden="true">
+			<span class={['label', { gone: view === 'docs' }]} aria-hidden="true">
 				<!-- An open book, drawn in the same hairline as the copy icon -->
 				<span class="keycap">
 					<svg class="book" viewBox="0 0 16 16">
@@ -322,7 +330,7 @@
 			>{token.rest}{/each}{/snippet}
 
 	<!-- Fading back while the request's on its way, until the response glitches in over it -->
-	<div class="terminal" class:waiting={stage === 'sending'}>
+	<div class={['terminal', { waiting: stage === 'sending' }]}>
 		<!-- Unseen, the docs as they first show, to size the box by on a phone -->
 		<div class="fit" aria-hidden="true">
 			<div class="headers">
@@ -334,7 +342,7 @@
 		</div>
 		<div class="scroll">
 			<!-- With the docs, the headers the response comes with, a little fainter -->
-			<div class="headers" class:ghost={!shownStatus}>
+			<div class={['headers', { ghost: !shownStatus }]}>
 				{#each shownStatus ? shownHeaders : exampleHeaders as [name, value] (name)}
 					<p class="header"><span>{name}:</span> {value}</p>
 				{/each}

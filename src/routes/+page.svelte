@@ -17,10 +17,10 @@
 	import day from '#lib/assets/bridge/day.webp';
 	import dusk from '#lib/assets/bridge/dusk.webp';
 	import night from '#lib/assets/bridge/night.webp';
+	import { getPage } from '#lib/holidays.remote.js';
 	import { currentYear, now, paletteAt, phaseOf, sunAt } from '#lib/sky.js';
-	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	const data = await getPage();
 
 	const reducedMotion = new MediaQuery('prefers-reduced-motion: reduce');
 
@@ -39,6 +39,9 @@
 
 	// Whether the scene has drawn its first frame, to take the place of its snapshot
 	let ready = $state(false);
+
+	// Where cars fly through the words, handed to the scene
+	let header = $state<HTMLElement>();
 
 	const rgb = ([r, g, b]: number[]) => `rgb(${Math.round(r!)} ${Math.round(g!)} ${Math.round(b!)})`;
 
@@ -74,7 +77,7 @@
 </svelte:head>
 
 <div class="page">
-	<header>
+	<header bind:this={header}>
 		<h1>
 			<span class="words">Every Penang</span>
 			<span class="last"
@@ -98,12 +101,11 @@
 	<div class="scene">
 		<!-- three.js is most of the page's weight, so the scene loads after everything else -->
 		{#await import('#lib/Scene.svelte') then { default: Scene }}
-			<Scene reducedMotion={reducedMotion.current} onready={() => (ready = true)} />
+			<Scene reducedMotion={reducedMotion.current} {header} onready={() => (ready = true)} />
 		{/await}
 		<!-- A still of the scene at each time of day, shown until three.js has loaded and drawn it -->
 		<div
-			class="still"
-			class:ready
+			class={['still', { ready }]}
 			aria-hidden="true"
 			style:--dawn={`url("${dawn}")`}
 			style:--day={`url("${day}")`}

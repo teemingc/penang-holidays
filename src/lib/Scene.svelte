@@ -6,11 +6,13 @@
 
 	interface Props {
 		reducedMotion: boolean;
+		/** The page's header, which cars fly through as cloud; its `.flag` flaps in their gust */
+		header?: HTMLElement;
 		/** Called once the scene has drawn its first frame */
 		onready?: () => void;
 	}
 
-	let { reducedMotion, onready }: Props = $props();
+	let { reducedMotion, header, onready }: Props = $props();
 
 	// The canvases are hidden until the first frame is on them: some browsers paint a canvas
 	// white for a moment before anything is drawn to it
@@ -77,6 +79,12 @@
 	let ocean: HTMLCanvasElement;
 	// Throws a car off the bridge, for the keyboard; set up with the scene
 	let throwOne = () => {};
+	// Picks up, drags and lets go of a vehicle, for a pointer; set up with the scene
+	let handle: { down(event: PointerEvent): void; move(event: PointerEvent): void; up(): void } = {
+		down() {},
+		move() {},
+		up() {}
+	};
 
 	function keydown(event: KeyboardEvent) {
 		if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -137,7 +145,6 @@
 	}
 
 	onMount(() => {
-		const still = reducedMotion;
 		const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 		renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
 		renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1187,7 +1194,7 @@
 				}
 			}
 			// With reduced motion it's gone at once, to the bottom
-			if (still) remove(vehicle);
+			if (reducedMotion) remove(vehicle);
 		}
 
 		// The splash: droplets thrown up and out, falling back to the water
@@ -1278,7 +1285,7 @@
 			if (!entered || vehicle.scored || vehicle.velocity.length() < 15) return;
 			vehicle.scored = true;
 			cheering = performance.now() / 1000;
-			if (still) return;
+			if (reducedMotion) return;
 			// Nobody lets off fireworks in daylight: by day the cables' strobe is the celebration
 			if (palette.lamps < 0.5) return;
 			// Shells go up from the water all around the pylon, a few at a time
@@ -1511,7 +1518,6 @@
 		// which way each bit of it was pushed, and how badly it was torn. An SVG filter on the
 		// header itself would be simpler, but Safari doesn't run one on a page's text, and every
 		// other browser redraws the whole thing on the processor each time the map changes
-		const header = document.querySelector('header');
 		const WAKE_SCALE = 0.25;
 		let headerBox = { x: 0, y: 0, w: 0, h: 0 };
 		// The disturbance, per cell of the map: which way it was pushed, and how torn it is
@@ -1717,6 +1723,21 @@
 		// Plain, not reactive: only the smoke reads it
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const written = new Set<HTMLElement>();
+		// How far below the top of its first letter the text sits on its line, read from a mark of
+		// no size set on the baseline just before it, on the same line
+		const mark = document.createElement('span');
+		mark.style.cssText = 'display: inline-block; width: 0; height: 0; vertical-align: baseline';
+		function baselineOf(node: Text, range: Range) {
+			const first = node.data.search(/\S/);
+			range.setStart(node, first);
+			range.setEnd(node, first + 1);
+			const top = range.getClientRects()[0]?.top;
+			if (top === undefined) return;
+			node.before(mark);
+			const baseline = mark.getBoundingClientRect().top;
+			mark.remove();
+			return baseline - top;
+		}
 		function photograph() {
 			if (!header) return;
 			// In their own colours, even while they're hidden
@@ -1738,8 +1759,9 @@
 				const style = getComputedStyle(parent);
 				drawing.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 				drawing.fillStyle = style.color;
-				// From the top of the text's box down to its baseline
-				const ascent = drawing.measureText('H').fontBoundingBoxAscent;
+				// From the top of the text's box down to its baseline, as the page lays it out: the
+				// canvas's own metrics are rounded, and can put a large line a pixel too high
+				const ascent = baselineOf(node, range) ?? drawing.measureText('H').fontBoundingBoxAscent;
 				for (let i = 0; i < node.data.length; i++) {
 					if (!node.data[i]!.trim()) continue;
 					range.setStart(node, i);
@@ -1815,7 +1837,7 @@
 		// Where a vehicle is on screen, from frame to frame, to know which way it's going
 		const trails = new WeakMap<Loose, { x: number; y: number }>();
 		function waft(vehicle: Loose) {
-			if (still || !header) return;
+			if (reducedMotion || !header) return;
 			onScreen.copy(vehicle.mesh.position).project(camera);
 			const x = ((onScreen.x + 1) / 2) * host.clientWidth - headerBox.x;
 			const y = ((1 - onScreen.y) / 2) * host.clientHeight - headerBox.y;
@@ -1904,7 +1926,7 @@
 		// Flicked with a finger, the flag is blown about as by a car flying close by, away from
 		// the side it was flicked on
 		function flick(event: PointerEvent) {
-			if (still || !flag) return;
+			if (reducedMotion || !flag) return;
 			if (event.pointerType === 'mouse' && event.button !== 0) return;
 			const cloth = flag.getBoundingClientRect();
 			gust = Math.max(gust, 0.9);
@@ -2200,11 +2222,9 @@
 			if (onBridge(spot) || nearest(spot) !== null) event.preventDefault();
 		}
 
+		// Not passive, to hold the page still; Svelte adds touch listeners as passive
 		host.addEventListener('touchstart', touchstart, { passive: false });
-		host.addEventListener('pointerdown', down);
-		host.addEventListener('pointermove', move);
-		host.addEventListener('pointerup', up);
-		host.addEventListener('pointercancel', up);
+		handle = { down, move, up };
 
 		// The light for the time of day in Penang, from the sun, or by night from the moon
 		let palette = paletteAt(sunAt(now()));
@@ -2258,7 +2278,7 @@
 				// After a field goal, every cable strobes gold and white for a few seconds: under three
 				// flashes a second, the most that's safe for anyone sensitive to flashing
 				if (since < 3) {
-					const flash = still ? gold : Math.sin(since * 17 + x * 0.05) > 0 ? gold : white;
+					const flash = reducedMotion ? gold : Math.sin(since * 17 + x * 0.05) > 0 ? gold : white;
 					led.copy(flash);
 				}
 				cableColors.set([led.r, led.g, led.b], i * 3);
@@ -2301,7 +2321,7 @@
 		}
 		const observer = new ResizeObserver(resize);
 		observer.observe(host);
-		observer.observe(document.querySelector('header') ?? host);
+		observer.observe(header ?? host);
 		document.fonts?.ready.then(resize);
 		resize();
 		light();
@@ -2320,17 +2340,17 @@
 			}
 
 			// With reduced motion the traffic holds still
-			if (!still) clock += dt;
+			if (!reducedMotion) clock += dt;
 			traffic(clock);
 			// The motorcycles never stop
-			motorcycles(still ? 0 : dt * 9, clock);
+			motorcycles(reducedMotion ? 0 : dt * 9, clock);
 			physics(dt, now / 1000);
 			settle(dt);
 			flutter(dt);
 			cableLights(clock);
 			beacons.material.opacity =
-				still || Math.sin(clock * 3) > -0.3 || now / 1000 - cheering < 3 ? 1 : 0.15;
-			if (!still) twinkle();
+				reducedMotion || Math.sin(clock * 3) > -0.3 || now / 1000 - cheering < 3 ? 1 : 0.15;
+			if (!reducedMotion) twinkle();
 			drawSea(clock);
 			renderer.render(scene, tall);
 			if (!drawn) {
@@ -2347,10 +2367,6 @@
 			observer.disconnect();
 			phases.disconnect();
 			host.removeEventListener('touchstart', touchstart);
-			host.removeEventListener('pointerdown', down);
-			host.removeEventListener('pointermove', move);
-			host.removeEventListener('pointerup', up);
-			host.removeEventListener('pointercancel', up);
 			renderer.dispose();
 			flag?.removeEventListener('pointerdown', flick);
 			gust = flapping = 0;
@@ -2368,13 +2384,16 @@
 </script>
 
 <div
-	class="scene"
-	class:shown
+	class={['scene', { shown }]}
 	bind:this={host}
 	role="button"
 	tabindex="0"
 	aria-label="Throw a car off the Penang Bridge into the sea"
 	onkeydown={keydown}
+	onpointerdown={(event) => handle.down(event)}
+	onpointermove={(event) => handle.move(event)}
+	onpointerup={() => handle.up()}
+	onpointercancel={() => handle.up()}
 >
 	<canvas class="ocean" bind:this={ocean}></canvas>
 	<canvas class="bridge" bind:this={canvas}></canvas>
