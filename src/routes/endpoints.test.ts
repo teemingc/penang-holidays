@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { YearHolidays } from '#lib/holidays.js';
+import type { Holiday } from '#lib/holidays.js';
 import { GET as getYears } from './years/+server.ts';
 import { GET as getYear } from './[year]/+server.ts';
 import { GET as getMonth } from './[year]/[month]/+server.ts';
@@ -8,7 +8,7 @@ import { GET as getMonth } from './[year]/[month]/+server.ts';
 type Event<T extends (...args: never[]) => unknown> = Parameters<T>[0];
 
 // Every field any endpoint returns, so tests can read whichever they need
-type Body = Partial<YearHolidays> & { years?: number[]; month?: number; error?: string };
+type Body = { holidays?: Holiday[]; years?: number[]; error?: string };
 
 async function call(response: Response | Promise<Response>) {
 	const res = await response;
@@ -30,7 +30,7 @@ test('returns a year', async () => {
 		getYear({ params: { year: '2026' } } as Event<typeof getYear>)
 	);
 	expect(status).toBe(200);
-	expect(body.year).toBe(2026);
+	expect(Object.keys(body)).toEqual(['holidays']);
 	expect(body.holidays).toHaveLength(20);
 });
 
@@ -40,7 +40,7 @@ test('returns a month, with or without a leading zero', async () => {
 			getMonth({ params: { year: '2026', month } } as Event<typeof getMonth>)
 		);
 		expect(status).toBe(200);
-		expect(body.month).toBe(3);
+		expect(Object.keys(body)).toEqual(['holidays']);
 		expect(body.holidays?.map((h) => h.date)).toEqual(['2026-03-07', '2026-03-21', '2026-03-22']);
 	}
 });

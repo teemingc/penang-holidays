@@ -25,10 +25,15 @@ export function getYear(param: string): YearHolidays | undefined {
 	return years.find((y) => String(y.year) === param);
 }
 
-/** The body of `GET /{year}/{month}` */
+/** The body of `GET /{year}`; the year's already in the path, so it isn't repeated */
+export function inYear(year: YearHolidays) {
+	return { holidays: year.holidays };
+}
+
+/** The body of `GET /{year}/{month}`, without the year and month the path already gives */
 export function inMonth(year: YearHolidays, month: number) {
 	const prefix = `${year.year}-${String(month).padStart(2, '0')}-`;
-	return { ...year, month, holidays: year.holidays.filter((h) => h.date.startsWith(prefix)) };
+	return { holidays: year.holidays.filter((h) => h.date.startsWith(prefix)) };
 }
 
 export function yearNotFound(param: string): Response {

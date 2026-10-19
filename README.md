@@ -41,6 +41,8 @@ A SvelteKit app on Cloudflare Workers serves the same data, bundled from `data/`
 | `GET /2026`   | All holidays in 2026                    |
 | `GET /2026/3` | Holidays in March 2026                  |
 
+A year or month comes back as `{ "holidays": [...] }`, each holiday with the fields above. The year and month aren't repeated, since they're in the path.
+
 Successful responses are cached for an hour, by browsers and by [Workers Cache](https://developers.cloudflare.com/workers/cache/), which answers repeat requests without running the Worker. Errors aren't cached.
 
 ## Updating

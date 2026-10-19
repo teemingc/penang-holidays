@@ -21,7 +21,6 @@
 	// What each field of the response means, in the order they come, shown until the request's
 	// sent and again whenever they're asked for. Short enough to fit a phone without wrapping
 	const DOCS = `{
-  "year": number,
   "holidays": [
     {
       "date": string,  // YYYY-MM-DD
@@ -29,8 +28,7 @@
       "type": "federal" | "state",
       "tentative": boolean  // date may move
     }
-  ],
-  "month": number      // 1 to 12
+  ]
 }`;
 
 	let stage = $state<'idle' | 'sending' | 'done'>('idle');
