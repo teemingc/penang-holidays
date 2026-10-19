@@ -17,7 +17,7 @@
 	import day from '#lib/assets/bridge/day.webp';
 	import dusk from '#lib/assets/bridge/dusk.webp';
 	import night from '#lib/assets/bridge/night.webp';
-	import { now, paletteAt, phaseOf, sunAt } from '#lib/sky.js';
+	import { currentMonth, now, paletteAt, phaseOf, sunAt } from '#lib/sky.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -30,9 +30,12 @@
 	// How many strips the little flag in the headline is cut into, to wave
 	const STRIPS = 24;
 
-	const path = $derived(
-		resolve('/[year]/[month]', { year: String(data.year), month: String(data.month) })
-	);
+	// The month to request: the one the page was built in, then the one it's opened in
+	let opened = $state<{ year: number; month: number }>();
+	onMount(() => (opened = currentMonth(now(), data.years)));
+	const { year, month } = $derived(opened ?? data);
+
+	const path = $derived(resolve('/[year]/[month]', { year: String(year), month: String(month) }));
 
 	// Whether the scene has drawn its first frame, to take the place of its snapshot
 	let ready = $state(false);
@@ -112,7 +115,7 @@
 	<section class="request" aria-label="Try the API">
 		<Request
 			{path}
-			url={`${ORIGIN}/${data.year}/${data.month}`}
+			url={`${ORIGIN}/${year}/${month}`}
 			previewHeaders={data.previewHeaders}
 			reducedMotion={reducedMotion.current}
 		/>
