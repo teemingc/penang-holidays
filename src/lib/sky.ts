@@ -7,6 +7,10 @@ const LONGITUDE = 100.33;
 
 const radians = (degrees: number) => (degrees * Math.PI) / 180;
 
+/** The date in Penang at a given moment, e.g. `2026-02-17` */
+const penangDate = (date: Date) =>
+	date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' });
+
 /**
  * Now, or for previewing another time of day, the Penang time in a `?time=21:30` query
  */
@@ -16,15 +20,12 @@ export function now(): Date {
 	const match = time?.match(/^(\d{1,2}):(\d{2})$/);
 	if (!match) return new Date();
 	// Today's date in Penang, at that time, in Penang's offset of UTC+8
-	const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' });
-	return new Date(`${today}T${match[1]!.padStart(2, '0')}:${match[2]}:00+08:00`);
+	return new Date(`${penangDate(new Date())}T${match[1]!.padStart(2, '0')}:${match[2]}:00+08:00`);
 }
 
 /** The year it is in Penang at a given moment, or the latest available when it isn't one yet */
 export function currentYear(date: Date, available: number[]): number {
-	const year = Number(
-		date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).slice(0, 4)
-	);
+	const year = Number(penangDate(date).slice(0, 4));
 	return available.includes(year) ? year : available.at(-1)!;
 }
 

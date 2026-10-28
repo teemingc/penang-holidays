@@ -18,6 +18,7 @@
 	import dusk from '#lib/assets/bridge/dusk.webp';
 	import night from '#lib/assets/bridge/night.webp';
 	import { getPage } from '#lib/holidays.remote.js';
+	import { SOURCE_URL } from '#lib/source.js';
 	import { currentYear, now, paletteAt, phaseOf, sunAt } from '#lib/sky.js';
 
 	const data = await getPage();
@@ -92,9 +93,7 @@
 			>
 		</h1>
 		<p>
-			Sourced from <a href="https://www.penang.gov.my/index.php/component/sppagebuilder/page/50"
-				>penang.gov.my</a
-			>.
+			Sourced from <a href={SOURCE_URL} rel="external">penang.gov.my</a>.
 		</p>
 	</header>
 
@@ -140,8 +139,8 @@
 
 <style>
 	/* The sky over Penang right now: night, dawn, day or dusk. The sky's own colours here are
-	   only for a page without scripts: otherwise --top and --horizon are blended from
-	   src/lib/sky.ts, as the scene's sky is, so the two meet without a seam */
+	   only for a page without scripts, which is always night: otherwise --top and --horizon are
+	   blended from src/lib/sky.ts, as the scene's sky is, so the two meet without a seam */
 	:global(:root) {
 		--top: rgb(5 8 20);
 		--horizon: rgb(22 32 66);
@@ -152,15 +151,11 @@
 	}
 
 	:global(:root[data-sky='dawn']) {
-		--top: rgb(52 66 128);
-		--horizon: rgb(246 172 150);
 		--accent: #ffd2b8;
 		--ink-soft: rgb(243 244 247 / 0.8);
 	}
 
 	:global(:root[data-sky='day']) {
-		--top: rgb(92 160 226);
-		--horizon: rgb(206 230 246);
 		--ink: #0b1d36;
 		--ink-soft: rgb(11 29 54 / 0.85);
 		--accent: #063f73;
@@ -168,8 +163,6 @@
 	}
 
 	:global(:root[data-sky='dusk']) {
-		--top: rgb(38 40 98);
-		--horizon: rgb(244 140 82);
 		--accent: #ffc58f;
 		--ink-soft: rgb(243 244 247 / 0.8);
 	}

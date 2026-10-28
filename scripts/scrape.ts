@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
+import { SOURCE_URL } from '../src/lib/source.ts';
 import { parseHolidayPage } from './parse.ts';
 
-const SOURCE_URL = 'https://www.penang.gov.my/index.php/component/sppagebuilder/page/50';
 const DATA_DIR = new URL('../data/', import.meta.url);
 
 // The portal returns HTTP 500 to clients without a browser user agent

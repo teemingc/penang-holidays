@@ -11,6 +11,7 @@
 
 	import { onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { morpher, scrambler, tokenize, type Token } from './terminal.js';
 
 	let { path, url, previewHeaders, reducedMotion }: Props = $props();
 
@@ -85,23 +86,6 @@
 		copiedTimer = setTimeout(() => (copied = false), 1600);
 	}
 
-	// A random character of the same kind, so letters stay letters and digits stay digits
-	function glitch(c: string) {
-		if (/\d/.test(c)) return String(Math.floor(Math.random() * 10));
-		const letter = String.fromCharCode(97 + Math.floor(Math.random() * 26));
-		return c === c.toUpperCase() ? letter.toUpperCase() : letter;
-	}
-
-	// Draws text scrambled at a moment in its settling, each character landing in turn, left to
-	// right. true, false and null stay as they are, so no colour changes with them
-	function scrambler(text: string) {
-		const settle = [...text].map((_, i) => (i / text.length) * 200 + Math.random() * 100);
-		return (t: number) =>
-			text.replace(/\b(?:true|false|null)\b|[a-z0-9]/gi, (c, i) =>
-				c.length > 1 || t >= (settle[i] ?? 0) ? c : glitch(c)
-			);
-	}
-
 	// Which change is the latest: an older one still settling stops when a new one starts
 	let run = 0;
 
@@ -110,22 +94,6 @@
 		run++;
 		clearTimeout(copiedTimer);
 	});
-
-	// The same, for a path that may be longer or shorter than the one before: it grows or
-	// shrinks a character at a time as it settles, so the copy icon after it glides rather
-	// than jumps. The slashes and braces hold still
-	function morpher(from: string, to: string) {
-		const settle = [...to].map((_, i) => (i / to.length) * 200 + Math.random() * 100);
-		return (t: number) => {
-			const length = Math.round(from.length + (to.length - from.length) * Math.min(1, t / 300));
-			let text = '';
-			for (let i = 0; i < length; i++) {
-				const c = to[i] ?? from[i] ?? '';
-				text += t >= (settle[i] ?? Infinity) || !/[a-z0-9]/i.test(c) ? c : glitch(c);
-			}
-			return text;
-		};
-	}
 
 	interface Drawn {
 		path: string;
@@ -198,27 +166,6 @@
 		stage = 'idle';
 		view = 'docs';
 		settle({ path: TEMPLATE, body: DOCS, status: '', time: '', headers: exampleHeaders }, ++run);
-	}
-
-	// The JSON, split into comments, keys, strings, numbers and the rest, to colour each
-	function tokenize(text: string) {
-		return [
-			...text.matchAll(
-				/(\/\/[^\n]*)|("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?)|[^"\w/-]+|\w+|[-/]/g
-			)
-		].map((m) =>
-			m[1]
-				? { text: m[1], kind: 'comment', rest: '' }
-				: m[2] && m[3]
-					? { text: m[2], kind: 'key', rest: m[3] }
-					: m[2]
-						? { text: m[2], kind: 'string', rest: '' }
-						: m[4]
-							? { text: m[4], kind: 'literal', rest: '' }
-							: m[5]
-								? { text: m[5], kind: 'number', rest: '' }
-								: { text: m[0], kind: '', rest: '' }
-		);
 	}
 
 	const tokens = $derived(tokenize(shown));
@@ -325,27 +272,29 @@
 	</div>
 
 	<!-- Always there, so the page doesn't shift when the response arrives: until then, the docs -->
-	{#snippet json(tokens: ReturnType<typeof tokenize>)}{#each tokens as token, i (i)}<span
-				class={token.kind}>{token.text}</span
+	{#snippet json(tokens: Token[])}{#each tokens as token, i (i)}<span class={token.kind}
+				>{token.text}</span
 			>{token.rest}{/each}{/snippet}
+
+	{#snippet headerList(headers: [string, string][])}
+		{#each headers as [name, value] (name)}
+			<p class="header"><span>{name}:</span> {value}</p>
+		{/each}
+	{/snippet}
 
 	<!-- Fading back while the request's on its way, until the response glitches in over it -->
 	<div class={['terminal', { waiting: stage === 'sending' }]}>
 		<!-- Unseen, the docs as they first show, to size the box by on a phone -->
 		<div class="fit" aria-hidden="true">
 			<div class="headers">
-				{#each exampleHeaders as [name, value] (name)}
-					<p class="header"><span>{name}:</span> {value}</p>
-				{/each}
+				{@render headerList(exampleHeaders)}
 			</div>
 			<pre>{@render json(docsTokens)}</pre>
 		</div>
 		<div class="scroll">
 			<!-- With the docs, the headers the response comes with, a little fainter -->
 			<div class={['headers', { ghost: !shownStatus }]}>
-				{#each shownStatus ? shownHeaders : exampleHeaders as [name, value] (name)}
-					<p class="header"><span>{name}:</span> {value}</p>
-				{/each}
+				{@render headerList(shownStatus ? shownHeaders : exampleHeaders)}
 			</div>
 			<pre>{@render json(tokens)}</pre>
 		</div>

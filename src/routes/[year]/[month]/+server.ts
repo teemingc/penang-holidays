@@ -1,4 +1,5 @@
-import { getYear, inMonth, json, yearNotFound } from '#lib/holidays.js';
+import { getYear } from '#lib/holidays.js';
+import { inMonth, json, yearNotFound } from '#lib/server/response.js';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ params }) => {

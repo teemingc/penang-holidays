@@ -1,5 +1,6 @@
 import { prerender } from '$app/server';
-import { getYear, inYear, json, years } from '#lib/holidays.js';
+import { getYear, years } from '#lib/holidays.js';
+import { inYear, json } from '#lib/server/response.js';
 import { currentYear } from '#lib/sky.js';
 
 // Worked out at build time, which happens whenever the data changes
