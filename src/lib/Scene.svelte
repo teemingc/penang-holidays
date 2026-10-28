@@ -1621,15 +1621,18 @@
 				vec2 q = vec2(vUv.x, 1.0 - vUv.y) * size - margin;
 				float tear = disturbance(q).b;
 				vec4 colour = pushed(q);
-				if (tear > 0.004) {
+				// Only where it's torn enough to see: as it heals, a trace of the tear spreads over
+				// all of it, and the wisps are the costliest thing drawn on the page
+				if (tear > 0.02) {
 					vec4 wisps = vec4(0.0);
 					float total = 0.0;
+					// The noise barely changes across the blur, so it's worked out once for all of it
+					vec2 drift = 22.0 * (turbulence(q) - 0.5);
 					for (int i = -1; i <= 1; i++) {
 						for (int j = -1; j <= 1; j++) {
 							vec2 o = vec2(float(i), float(j)) * 2.5;
 							float weight = exp(-dot(o, o) / 12.5);
-							vec2 s = q + o;
-							wisps += weight * pushed(s + 22.0 * (turbulence(s) - 0.5));
+							wisps += weight * pushed(q + o + drift);
 							total += weight;
 						}
 					}
@@ -1703,19 +1706,15 @@
 			smoke.setSize(width, height);
 			picture.width = width * ratio;
 			picture.height = height * ratio;
-			// Drawn to in the page's own coordinates
-			drawing.setTransform(
-				ratio,
-				0,
-				0,
-				ratio,
-				(margin.x - box.left) * ratio,
-				(margin.y - box.top) * ratio
-			);
+			framing = { ...margin, ratio };
 			const { uniforms } = smokeMaterial;
 			(uniforms.size!.value as THREE.Vector2).set(width, height);
 			(uniforms.margin!.value as THREE.Vector2).set(margin.x, margin.y);
 			(uniforms.box!.value as THREE.Vector2).set(box.width, box.height);
+			// Drawn once, unseen, so the first car through doesn't wait on the smoke being made
+			// ready to draw, or on the header's letters being drawn into a canvas for the first time
+			photograph();
+			smoke.render(smokeScene, smokeCamera);
 		}
 
 		// The header's words as they are now, every letter where the page has put it. The flag
@@ -1738,14 +1737,19 @@
 			mark.remove();
 			return baseline - top;
 		}
+		// The margin around the header in the picture, and its pixels to a CSS pixel
+		let framing = { x: 0, y: 0, ratio: 1 };
 		function photograph() {
 			if (!header) return;
 			// In their own colours, even while they're hidden
 			for (const words of written) words.style.color = '';
-			drawing.save();
 			drawing.resetTransform();
 			drawing.clearRect(0, 0, picture.width, picture.height);
-			drawing.restore();
+			// Drawn to in the window's coordinates, from where the header is now: the page may
+			// have scrolled since it was measured
+			const box = header.getBoundingClientRect();
+			const { x, y, ratio } = framing;
+			drawing.setTransform(ratio, 0, 0, ratio, (x - box.left) * ratio, (y - box.top) * ratio);
 			const range = document.createRange();
 			const walker = document.createTreeWalker(header, NodeFilter.SHOW_TEXT);
 			for (
