@@ -1584,10 +1584,12 @@
 			}
 			vec4 disturbance(vec2 q) {
 				vec2 uv = q / box;
-				return outside(uv) ? vec4(0.5, 0.5, 0.0, 0.0) : texture2D(wake, uv);
+				return outside(uv) ? vec4(128.0 / 255.0, 128.0 / 255.0, 0.0, 0.0) : texture2D(wake, uv);
 			}
+			// The push is stored around 128, which is a little over half: read as half, the
+			// header at rest would be drawn a fraction of a pixel off, and blurred by it
 			vec4 pushed(vec2 q) {
-				return seen(q + 40.0 * (disturbance(q).rg - 0.5));
+				return seen(q + 20.0 * (disturbance(q).rg * 255.0 - 128.0) / 127.0);
 			}
 
 			vec2 hash(vec2 p) {
@@ -1751,6 +1753,7 @@
 			const { x, y, ratio } = framing;
 			drawing.setTransform(ratio, 0, 0, ratio, (x - box.left) * ratio, (y - box.top) * ratio);
 			const range = document.createRange();
+			const letters: { text: string; x: number; y: number; font: string; colour: string }[] = [];
 			const walker = document.createTreeWalker(header, NodeFilter.SHOW_TEXT);
 			for (
 				let node = walker.nextNode() as Text | null;
@@ -1761,8 +1764,8 @@
 				if (parent.closest('[aria-hidden="true"]') || !node.data.trim()) continue;
 				written.add(parent);
 				const style = getComputedStyle(parent);
-				drawing.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-				drawing.fillStyle = style.color;
+				const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+				drawing.font = font;
 				// From the top of the text's box down to its baseline, as the page lays it out: the
 				// canvas's own metrics are rounded, and can put a large line a pixel too high
 				const ascent = baselineOf(node, range) ?? drawing.measureText('H').fontBoundingBoxAscent;
@@ -1771,20 +1774,51 @@
 					range.setStart(node, i);
 					range.setEnd(node, i + 1);
 					const rect = range.getClientRects()[0];
-					if (rect) drawing.fillText(node.data[i]!, rect.left, rect.top + ascent);
+					if (rect) {
+						letters.push({
+							text: node.data[i]!,
+							x: rect.left,
+							y: rect.top + ascent,
+							font,
+							colour: style.color
+						});
+					}
 				}
 			}
+			// The underlines go first, and are cut away around the letters as the page cuts them
+			// around descenders, before the letters are drawn over them
+			let underlined = false;
 			for (const link of header.querySelectorAll('a')) {
 				const style = getComputedStyle(link);
 				if (!style.textDecorationLine.includes('underline')) continue;
+				underlined = true;
 				drawing.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 				drawing.fillStyle = style.textDecorationColor;
-				const ascent = drawing.measureText('H').fontBoundingBoxAscent;
+				const text = [...link.childNodes].find(
+					(node): node is Text => node instanceof Text && !!node.data.trim()
+				);
+				const ascent =
+					(text && baselineOf(text, range)) ?? drawing.measureText('H').fontBoundingBoxAscent;
 				const offset = parseFloat(style.textUnderlineOffset) || 0;
 				const thickness = parseFloat(style.textDecorationThickness) || 1;
 				for (const rect of link.getClientRects()) {
 					drawing.fillRect(rect.left, rect.top + ascent + offset, rect.width, thickness);
 				}
+			}
+			if (underlined) {
+				drawing.globalCompositeOperation = 'destination-out';
+				drawing.lineWidth = 3;
+				drawing.lineJoin = 'round';
+				for (const { text, x, y, font } of letters) {
+					drawing.font = font;
+					drawing.strokeText(text, x, y);
+				}
+				drawing.globalCompositeOperation = 'source-over';
+			}
+			for (const { text, x, y, font, colour } of letters) {
+				drawing.font = font;
+				drawing.fillStyle = colour;
+				drawing.fillText(text, x, y);
 			}
 			pictured.needsUpdate = true;
 			if (smoking) for (const words of written) words.style.color = 'transparent';
