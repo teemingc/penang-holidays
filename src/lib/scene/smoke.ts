@@ -354,6 +354,11 @@ export function createSmoke(
 			const ratio = Math.min(2, window.devicePixelRatio);
 			smoke.setPixelRatio(ratio);
 			smoke.setSize(width, height);
+			// three.js sets aside room for a texture once, at the size it's first drawn, so a
+			// picture of a new size, as when a phone is turned, needs a new texture to be drawn into
+			if (picture.width !== width * ratio || picture.height !== height * ratio) {
+				pictured.dispose();
+			}
 			picture.width = width * ratio;
 			picture.height = height * ratio;
 			framing = { ...margin, ratio };

@@ -132,10 +132,7 @@
 	</a>
 </div>
 
-<!-- Safari on iOS tints its bars from what's fixed along the edges of the screen, so on a phone
-     each edge has a strip of the colour that's there -->
-<div class="edge top" aria-hidden="true"></div>
-<div class="edge bottom" aria-hidden="true"></div>
+<div class="edge" aria-hidden="true"></div>
 
 <style>
 	/* The sky over Penang right now: night, dawn, day or dusk. The sky's own colours here are
@@ -171,6 +168,10 @@
 	   page. It's the root's, so the body's sky can go beneath the body */
 	:global(:root) {
 		background: var(--top);
+		/* Pulled past its end, Safari shows only what's fixed beyond the page: the sky, without
+		   the shade of evening that's part of the page, in a band that lags behind as the page
+		   springs back. So the page stops at its ends instead */
+		overscroll-behavior-y: none;
 	}
 
 	:global(body) {
@@ -185,7 +186,10 @@
 	:global(body::before) {
 		content: '';
 		position: fixed;
-		inset: 0;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 100lvh;
 		z-index: -1;
 		background: linear-gradient(var(--top), var(--horizon));
 	}
@@ -194,35 +198,52 @@
 		display: none;
 	}
 
-	@media (max-width: 900px) {
-		.edge {
-			display: block;
-			position: fixed;
-			left: 0;
-			right: 0;
-			height: 4px;
-			pointer-events: none;
-		}
-
-		.edge.top {
-			top: 0;
-			background: var(--top);
-		}
-
-		.edge.bottom {
-			bottom: 0;
+	/* On a phone held upright, Safari shows the page's own colour under its bars, past the
+	   sky, and tints them with it, unless something fixed along that edge gives it another.
+	   The foot of the screen is left to the page's colour, which is the foot of the sky:
+	   anything fixed there, Safari paints as a solid band over the page, which lags behind as
+	   its bar slides away on a scroll. The top has a strip of the top of the sky, any thinner
+	   than which Safari passes it over. On its side, there's no bar at the foot, and the page's
+	   colour is the top of the sky */
+	@media (max-width: 900px) and (orientation: portrait) {
+		:global(:root) {
 			background: var(--horizon);
 		}
 
-		/* At dawn and dusk the foot of the screen is under the shade of evening, below */
-		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .edge.bottom {
-			background: color-mix(in srgb, rgb(26 20 56) 68%, var(--horizon));
+		.edge {
+			display: block;
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 12px;
+			background: var(--top);
+			pointer-events: none;
+		}
+	}
+
+	/* On its side, as Safari's bar slides away the screen grows, and the sky is moved to fill
+	   it a moment late, leaving the page's colour, the top of the sky, in a dark strip at the
+	   foot. With no bar at the foot to paint it as a band, the sky can reach past both edges
+	   of the screen, in its own colours, to cover whatever's uncovered */
+	@media (orientation: landscape) and (max-height: 500px) {
+		:global(body::before) {
+			top: -50lvh;
+			height: 200lvh;
+			background: linear-gradient(var(--top) 25%, var(--horizon) 75%);
 		}
 	}
 
 	.page {
 		/* How far below the top of its area the request starts */
 		--drop: clamp(0.5rem, 9vh, 6rem);
+		/* The page reaches every edge of the screen (viewport-fit=cover in src/app.html), so
+		   the gutters widen to keep the words clear of a notch or the corners of a phone on its
+		   side; what bleeds to the edges, bleeds by as much */
+		--gutter: 2.5rem;
+		--left: max(var(--gutter), env(safe-area-inset-left));
+		--right: max(var(--gutter), env(safe-area-inset-right));
+		--bottom: max(1.5rem, env(safe-area-inset-bottom));
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
 		grid-template-rows: auto minmax(0, 1fr) auto;
@@ -232,7 +253,7 @@
 			'. github';
 		column-gap: 3rem;
 		height: 100dvh;
-		padding: 2.5rem 2.5rem 1.5rem;
+		padding: 2.5rem var(--right) var(--bottom) var(--left);
 		box-sizing: border-box;
 		overflow: hidden;
 	}
@@ -385,7 +406,7 @@
 	.scene {
 		grid-area: scene;
 		min-height: 0;
-		margin: 0.5rem -2.5rem 0;
+		margin: 0.5rem calc(-1 * var(--right)) 0 calc(-1 * var(--left));
 		position: relative;
 		/* Sized by the page, never by what's in it, so the still can follow its shape */
 		container-type: size;
@@ -445,7 +466,7 @@
 		--ease:
 			transparent, rgb(0 0 0 / 0.04) 2rem, rgb(0 0 0 / 0.14) 4rem, rgb(0 0 0 / 0.3) 6rem,
 			rgb(0 0 0 / 0.52) 8rem, rgb(0 0 0 / 0.76) 10rem, rgb(0 0 0 / 0.93) 12rem, #000 13rem;
-		margin: calc(var(--drop) - 14rem) -2.5rem -1.5rem -16rem;
+		margin: calc(var(--drop) - 14rem) calc(-1 * var(--right)) calc(-1 * var(--bottom)) -16rem;
 		background: rgb(26 20 56 / 0.68);
 		mask-image: linear-gradient(var(--ease)), linear-gradient(to right, var(--ease));
 		mask-composite: intersect;
@@ -503,13 +524,14 @@
 			height: auto;
 			min-height: 100dvh;
 			overflow: visible;
-			padding: 2.75rem 1.5rem 1.5rem;
+			--gutter: 1.5rem;
+			padding-top: 2.75rem;
 		}
 
 		.scene {
 			height: 75vw;
 			max-height: 30rem;
-			margin: 1.5rem -1.5rem 1.5rem;
+			margin: 1.5rem calc(-1 * var(--right)) 1.5rem calc(-1 * var(--left));
 		}
 
 		.page {
@@ -527,10 +549,28 @@
 			max-width: 32rem;
 		}
 
-		/* Across the whole screen, so only its top edge is soft */
+		/* Across the whole screen, so only its top edge is soft. Past the end of the page,
+		   under Safari's bar, there's only the page's own colour, the sky at the horizon, so
+		   below the link the shade gives way to exactly that, along an eased curve so there's
+		   no line where it starts or ends */
+		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page {
+			--bottom: calc(max(1.5rem, env(safe-area-inset-bottom)) + 4rem);
+		}
+
 		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page::before {
+			--shade: rgb(26 20 56 / 0.68);
 			grid-column: 1 / -1;
-			margin-inline: -1.5rem;
+			margin-inline: calc(-1 * var(--left)) calc(-1 * var(--right));
+			background: linear-gradient(
+				to top,
+				var(--horizon),
+				color-mix(in srgb, var(--horizon) 93%, var(--shade)) calc(var(--bottom) / 6),
+				color-mix(in srgb, var(--horizon) 74%, var(--shade)) calc(var(--bottom) * 2 / 6),
+				color-mix(in srgb, var(--horizon) 50%, var(--shade)) calc(var(--bottom) * 3 / 6),
+				color-mix(in srgb, var(--horizon) 26%, var(--shade)) calc(var(--bottom) * 4 / 6),
+				color-mix(in srgb, var(--horizon) 7%, var(--shade)) calc(var(--bottom) * 5 / 6),
+				var(--shade) var(--bottom)
+			);
 			mask-image: linear-gradient(var(--ease));
 		}
 
