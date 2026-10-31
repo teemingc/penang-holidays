@@ -168,10 +168,6 @@
 	   page. It's the root's, so the body's sky can go beneath the body */
 	:global(:root) {
 		background: var(--top);
-		/* Pulled past its end, Safari shows only what's fixed beyond the page: the sky, without
-		   the shade of evening that's part of the page, in a band that lags behind as the page
-		   springs back. So the page stops at its ends instead */
-		overscroll-behavior-y: none;
 	}
 
 	:global(body) {
@@ -549,10 +545,10 @@
 			max-width: 32rem;
 		}
 
-		/* Across the whole screen, so only its top edge is soft. Past the end of the page,
-		   under Safari's bar, there's only the page's own colour, the sky at the horizon, so
-		   below the link the shade gives way to exactly that, along an eased curve so there's
-		   no line where it starts or ends */
+		/* Across the whole screen, so only its top edge is soft. Below the link the shade
+		   clears, along an eased curve so there's no line where it starts or ends, to leave the
+		   sky fixed behind the page: what Safari shows past the end of the page, pulled past it,
+		   and, as the page's own colour, under its bar */
 		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page {
 			--bottom: calc(max(1.5rem, env(safe-area-inset-bottom)) + 4rem);
 		}
@@ -563,12 +559,12 @@
 			margin-inline: calc(-1 * var(--left)) calc(-1 * var(--right));
 			background: linear-gradient(
 				to top,
-				var(--horizon),
-				color-mix(in srgb, var(--horizon) 93%, var(--shade)) calc(var(--bottom) / 6),
-				color-mix(in srgb, var(--horizon) 74%, var(--shade)) calc(var(--bottom) * 2 / 6),
-				color-mix(in srgb, var(--horizon) 50%, var(--shade)) calc(var(--bottom) * 3 / 6),
-				color-mix(in srgb, var(--horizon) 26%, var(--shade)) calc(var(--bottom) * 4 / 6),
-				color-mix(in srgb, var(--horizon) 7%, var(--shade)) calc(var(--bottom) * 5 / 6),
+				transparent,
+				color-mix(in srgb, transparent 93%, var(--shade)) calc(var(--bottom) / 6),
+				color-mix(in srgb, transparent 74%, var(--shade)) calc(var(--bottom) * 2 / 6),
+				color-mix(in srgb, transparent 50%, var(--shade)) calc(var(--bottom) * 3 / 6),
+				color-mix(in srgb, transparent 26%, var(--shade)) calc(var(--bottom) * 4 / 6),
+				color-mix(in srgb, transparent 7%, var(--shade)) calc(var(--bottom) * 5 / 6),
 				var(--shade) var(--bottom)
 			);
 			mask-image: linear-gradient(var(--ease));
