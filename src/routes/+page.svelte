@@ -187,7 +187,9 @@
 		right: 0;
 		height: 100lvh;
 		z-index: -1;
-		background: linear-gradient(var(--top), var(--horizon));
+		/* Under Safari's bar it isn't drawn, and the page's own colour shows instead, the
+		   horizon, so it's the horizon by the top of the bar */
+		background: linear-gradient(var(--top), var(--horizon) 100svh);
 	}
 
 	.edge {
