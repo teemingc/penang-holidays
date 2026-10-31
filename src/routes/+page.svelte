@@ -606,11 +606,11 @@
 			container-type: inline-size;
 		}
 
-		/* Its capitals start level with the request's beside it: in Newsreader they start
-		   0.072em down its line, and in the request's IBM Plex Mono, at the size set in
-		   src/lib/Request.svelte, 0.277em down */
+		/* It sits on the same baseline as the request beside it: in Newsreader the baseline
+		   is 0.78em down its line, and in the request's IBM Plex Mono, at the size set in
+		   src/lib/Request.svelte, 0.975em down */
 		h1 {
-			margin-top: calc(0.277 * clamp(1.5rem, 2.3vw, 2rem) - 0.072em);
+			margin-top: calc(0.975 * clamp(1.5rem, 2.3vw, 2rem) - 0.78em);
 			font-size: clamp(1.75rem, min(10svh, 100cqi / 11.6), 2.75rem);
 		}
 
