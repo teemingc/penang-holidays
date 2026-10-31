@@ -17,6 +17,8 @@
 	import day from '#lib/assets/bridge/day.webp';
 	import dusk from '#lib/assets/bridge/dusk.webp';
 	import night from '#lib/assets/bridge/night.webp';
+	// The page at dusk, for when it's shared; drawn by scripts/og.html
+	import og from '#lib/assets/og.png';
 	import { getPage } from '#lib/holidays.remote.js';
 	import { SOURCE_URL } from '#lib/source.js';
 	import { currentYear, now, paletteAt, phaseOf, sunAt } from '#lib/sky.js';
@@ -75,6 +77,21 @@
 		name="description"
 		content="Penang public holidays from the state government portal, as a free JSON API."
 	/>
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content={ORIGIN} />
+	<meta property="og:title" content="Every Penang holiday" />
+	<meta
+		property="og:description"
+		content="Penang public holidays from the state government portal, as a free JSON API."
+	/>
+	<meta property="og:image" content={new URL(og, ORIGIN).href} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta
+		property="og:image:alt"
+		content="Every Penang holiday, over the Penang Bridge at dusk, with the Penang flag"
+	/>
+	<meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
 <div class="page">
