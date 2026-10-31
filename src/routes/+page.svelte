@@ -599,10 +599,10 @@
 		}
 	}
 
-	/* A phone on its side is as short as a letterbox: the request takes a column the full
-	   height of the screen, to leave its response room, with the link to the code tucked
-	   under it, and the title sits over the bridge in the other, with the bridge running
-	   down to the foot of the screen */
+	/* A phone on its side is as short as a letterbox, so rather than squeeze into it, the page
+	   scrolls: the request takes a column as tall as its docs, the title sits over the bridge
+	   in the other, with the bridge filling at least the first screen, and the link to the
+	   code waits at the foot of the page, under the bridge */
 	@media (orientation: landscape) and (max-height: 500px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr) 21rem;
@@ -610,10 +610,13 @@
 			grid-template-areas:
 				'header request'
 				'scene request'
-				'scene github';
+				'github .';
 			column-gap: 2rem;
 			--gutter: 1.5rem;
 			--drop: 0px;
+			height: auto;
+			min-height: 100dvh;
+			overflow: visible;
 			padding-top: 1.25rem;
 		}
 
@@ -638,17 +641,13 @@
 
 		/* Clear of the request beside it, which the feathered edge leads into */
 		.scene {
-			margin: 0.5rem 0 calc(-1 * var(--bottom)) calc(-1 * var(--left));
+			min-height: 60svh;
+			margin: 0.5rem 0 0 calc(-1 * var(--left));
 		}
 
 		.github {
-			padding-top: 0.5rem;
-			font-size: 0.9375rem;
-		}
-
-		.github svg {
-			width: 0.875rem;
-			height: 0.875rem;
+			justify-content: flex-start;
+			padding-top: 1.5rem;
 		}
 	}
 </style>
