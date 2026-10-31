@@ -513,7 +513,9 @@
 		fill: currentColor;
 	}
 
-	@media (max-width: 900px) {
+	/* Narrow, the page is stacked, except on a phone on its side, which keeps the columns */
+	@media (max-width: 900px) and (orientation: portrait),
+		(max-width: 900px) and (min-height: 501px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr);
 			/* The link sits at the foot of the screen, however short the page */
@@ -577,6 +579,59 @@
 			align-self: end;
 			justify-content: flex-start;
 			padding-top: 1.5rem;
+		}
+	}
+
+	/* A phone on its side is as short as a letterbox: the request takes a column the full
+	   height of the screen, to leave its response room, with the link to the code tucked
+	   under it, and the title sits over the bridge in the other, with the bridge running
+	   down to the foot of the screen */
+	@media (orientation: landscape) and (max-height: 500px) {
+		.page {
+			grid-template-columns: minmax(0, 1fr) 21rem;
+			grid-template-rows: auto minmax(0, 1fr) auto;
+			grid-template-areas:
+				'header request'
+				'scene request'
+				'scene github';
+			column-gap: 2rem;
+			--gutter: 1.5rem;
+			--drop: 0px;
+			padding-top: 1.25rem;
+		}
+
+		/* The title is sized to keep to one line across its column, about 11.6em with the
+		   flag, and to the height of the screen, which is what's short */
+		header {
+			container-type: inline-size;
+		}
+
+		/* Its capitals start level with the request's beside it: in Newsreader they start
+		   0.072em down its line, and in the request's IBM Plex Mono, at the size set in
+		   src/lib/Request.svelte, 0.277em down */
+		h1 {
+			margin-top: calc(0.277 * clamp(1.5rem, 2.3vw, 2rem) - 0.072em);
+			font-size: clamp(1.75rem, min(10svh, 100cqi / 11.6), 2.75rem);
+		}
+
+		header p {
+			margin-top: 0.5rem;
+			font-size: clamp(1.0625rem, 5svh, 1.25rem);
+		}
+
+		/* Clear of the request beside it, which the feathered edge leads into */
+		.scene {
+			margin: 0.5rem 0 calc(-1 * var(--bottom)) calc(-1 * var(--left));
+		}
+
+		.github {
+			padding-top: 0.5rem;
+			font-size: 0.9375rem;
+		}
+
+		.github svg {
+			width: 0.875rem;
+			height: 0.875rem;
 		}
 	}
 </style>

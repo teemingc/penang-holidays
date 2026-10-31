@@ -561,7 +561,8 @@
 	   response arrives: a longer one scrolls. The unseen copy sets the height, and the
 	   response, sized to contain nothing, fills it. The fade falls in the room left under the
 	   last line, which shows in full once it's scrolled to */
-	@media (max-width: 900px) {
+	@media (max-width: 900px) and (orientation: portrait),
+		(max-width: 900px) and (min-height: 501px) {
 		.terminal {
 			grid-template-rows: auto;
 			mask-image: linear-gradient(#000 calc(100% - 1.5rem), transparent);
