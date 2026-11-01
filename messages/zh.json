@@ -1,0 +1,22 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"title": "槟城公共假期 API",
+	"description": "来自槟城州政府门户网站的公共假期，免费 JSON API。",
+	"heading_lead": "槟城所有",
+	"heading_last": "公共假期",
+	"sourced_from": "资料来源：",
+	"sourced_end": "。",
+	"try_api": "试用 API",
+	"languages": "语言",
+	"copy_url": "复制网址",
+	"copy_full_url": "复制完整网址",
+	"copied": "已复制",
+	"try_it_out": "试用",
+	"read_docs": "阅读文档",
+	"sending": "发送中",
+	"no_response": "无响应",
+	"no_response_body": "请求未能送达。请检查网络连接后重新发送。",
+	"docs_name": "中文名称",
+	"docs_original_name": "马来文原名",
+	"docs_tentative": "日期或有更改"
+}

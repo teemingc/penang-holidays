@@ -16,7 +16,7 @@ export default defineConfig({
 			adapter: adapter(),
 			experimental: { remoteFunctions: true }
 		}),
-		// only the page is localised, / in english and /ms in malay, api paths stay as they are
+		// only the page is localised, / in english, /ms in malay and /zh in chinese
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
@@ -27,6 +27,7 @@ export default defineConfig({
 					pattern: '/',
 					localized: [
 						['ms', '/ms'],
+						['zh', '/zh'],
 						['en', '/']
 					]
 				}

@@ -36,7 +36,7 @@
 	const ORIGIN = 'https://penang-holidays.teemingc.workers.dev';
 
 	// each language in its own name for the switcher
-	const NAMES = { en: 'English', ms: 'Melayu' };
+	const NAMES = { en: 'English', ms: 'Melayu', zh: '中文' };
 
 	// How many strips the little flag in the headline is cut into, to wave
 	const STRIPS = 24;
