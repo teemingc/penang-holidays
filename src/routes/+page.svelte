@@ -218,9 +218,12 @@
 	   The foot of the screen is left to the page's colour, which is the foot of the sky:
 	   anything fixed there, Safari paints as a solid band over the page, which lags behind as
 	   its bar slides away on a scroll. The top has a strip of the top of the sky, any thinner
-	   than which Safari passes it over. On its side, there's no bar at the foot, and the page's
-	   colour is the top of the sky */
-	@media (max-width: 900px) and (orientation: portrait) {
+	   than which Safari passes it over. On its side, there's no bar at the foot, but as the bar
+	   at the top slides away the screen grows, and the sky, clipped to the screen it had, is
+	   moved to fill it a moment late: the page's colour shows at the foot meanwhile, so it's
+	   the foot of the sky there too */
+	@media (max-width: 900px) and (orientation: portrait),
+		(orientation: landscape) and (max-height: 500px) {
 		:global(:root) {
 			background: var(--horizon);
 		}
@@ -234,18 +237,6 @@
 			height: 12px;
 			background: var(--top);
 			pointer-events: none;
-		}
-	}
-
-	/* On its side, as Safari's bar slides away the screen grows, and the sky is moved to fill
-	   it a moment late, leaving the page's colour, the top of the sky, in a dark strip at the
-	   foot. With no bar at the foot to paint it as a band, the sky can reach past both edges
-	   of the screen, in its own colours, to cover whatever's uncovered */
-	@media (orientation: landscape) and (max-height: 500px) {
-		:global(body::before) {
-			top: -50lvh;
-			height: 200lvh;
-			background: linear-gradient(var(--top) 25%, var(--horizon) 75%);
 		}
 	}
 
@@ -600,17 +591,20 @@
 	}
 
 	/* A phone on its side is as short as a letterbox, so rather than squeeze into it, the page
-	   scrolls: the request takes a column as tall as its docs, the title sits over the bridge
-	   in the other, with the bridge filling at least the first screen, and the link to the
-	   code waits at the foot of the page, under the bridge */
+	   scrolls: the request takes a column as tall as its docs, and the title sits over the
+	   bridge in the other. The bridge fills the rest of the first screen and no more, about
+	   7rem under the title, however long the docs make the page: stretched to their height, it
+	   would draw a sea as tall as the page. The link to the code waits under the docs, where
+	   it does on a wider screen */
 	@media (orientation: landscape) and (max-height: 500px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr) 21rem;
-			grid-template-rows: auto minmax(0, 1fr) auto;
+			grid-template-rows: auto max(60svh, 100svh - 7rem) 1fr auto;
 			grid-template-areas:
 				'header request'
 				'scene request'
-				'github .';
+				'. request'
+				'. github';
 			column-gap: 2rem;
 			--gutter: 1.5rem;
 			--drop: 0px;
@@ -641,13 +635,7 @@
 
 		/* Clear of the request beside it, which the feathered edge leads into */
 		.scene {
-			min-height: 60svh;
 			margin: 0.5rem 0 0 calc(-1 * var(--left));
-		}
-
-		.github {
-			justify-content: flex-start;
-			padding-top: 1.5rem;
 		}
 	}
 </style>
