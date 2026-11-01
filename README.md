@@ -65,7 +65,7 @@ The response's `Content-Language` header says which it is (`ms`, `en` or `zh-Han
 
 The translations aren't official; see [Credits](#credits). A name without one yet stays in Malay, without `originalName`.
 
-The home page is in English at [`/`](https://penang-holidays.teemingc.workers.dev/) and Malay at [`/ms`](https://penang-holidays.teemingc.workers.dev/ms). Its words are in [`messages/`](messages), compiled by [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs).
+The home page is in English at [`/`](https://penang-holidays.teemingc.workers.dev/), Malay at [`/ms`](https://penang-holidays.teemingc.workers.dev/ms) and Chinese at [`/zh`](https://penang-holidays.teemingc.workers.dev/zh). Its words are in [`messages/`](messages), compiled by [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs).
 
 Successful responses are cached for an hour, by browsers and by [Workers Cache](https://developers.cloudflare.com/workers/cache/), which answers repeat requests without running the Worker. Errors aren't cached. A response whose language came from `Accept-Language` is cached once for each value of the header (`Vary: Accept-Language`); `?lang=` is cached once for everyone.
 
