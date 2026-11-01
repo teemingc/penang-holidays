@@ -150,6 +150,15 @@ export function paletteAt(sun: Sun): Palette {
 	};
 }
 
+// at dawn and dusk the low sky is too light for light type and too dark for dark
+// so the page sky is shaded, the scene keeps its own colours
+const EVENING: Rgb = [26, 20, 56];
+
+/** the page sky for this phase, shaded at dawn and dusk */
+export function shade(colour: Rgb, phase: Phase): Rgb {
+	return phase === 'dawn' || phase === 'dusk' ? mix(colour, EVENING, 0.68) : colour;
+}
+
 export interface Moon extends Sun {
 	/** How much of it is lit, from 0 at new moon to 1 at full */
 	lit: number;

@@ -1,0 +1,22 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"title": "Penang Holidays API",
+	"description": "Penang public holidays from the state government portal, as a free JSON API.",
+	"heading_lead": "Every Penang ",
+	"heading_last": "holiday",
+	"sourced_from": "Sourced from ",
+	"sourced_end": ".",
+	"try_api": "Try the API",
+	"languages": "Language",
+	"copy_url": "Copy the URL",
+	"copy_full_url": "Copy the full URL",
+	"copied": "Copied",
+	"try_it_out": "Try it out",
+	"read_docs": "Read docs",
+	"sending": "Sending",
+	"no_response": "No response",
+	"no_response_body": "The request didn’t get through. Check your connection and send it again.",
+	"docs_name": "in English",
+	"docs_original_name": "as published",
+	"docs_tentative": "date may move"
+}

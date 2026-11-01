@@ -1,9 +1,13 @@
 // How Request.svelte draws text: glitching through random characters as it changes, and JSON
 // coloured by what each part of it is
 
-// A random character of the same kind, so letters stay letters and digits stay digits
+const HAN = /\p{Script=Han}/u;
+
+// a random character of the same kind, so letters, digits and chinese stay what they are
 function glitch(c: string) {
 	if (/\d/.test(c)) return String(Math.floor(Math.random() * 10));
+	// the common range U+4E00 to U+9FFF
+	if (HAN.test(c)) return String.fromCharCode(0x4e00 + Math.floor(Math.random() * 0x5200));
 	const letter = String.fromCharCode(97 + Math.floor(Math.random() * 26));
 	return c === c.toUpperCase() ? letter.toUpperCase() : letter;
 }
@@ -19,7 +23,7 @@ const landings = (text: string) =>
 export function scrambler(text: string) {
 	const settle = landings(text);
 	return (t: number) =>
-		text.replace(/\b(?:true|false|null)\b|[a-z0-9]/gi, (c, i) =>
+		text.replace(/\b(?:true|false|null)\b|[a-z0-9]|\p{Script=Han}/giu, (c, i) =>
 			c.length > 1 || t >= (settle[i] ?? 0) ? c : glitch(c)
 		);
 }
@@ -36,7 +40,7 @@ export function morpher(from: string, to: string) {
 		let text = '';
 		for (let i = 0; i < length; i++) {
 			const c = to[i] ?? from[i] ?? '';
-			text += t >= (settle[i] ?? Infinity) || !/[a-z0-9]/i.test(c) ? c : glitch(c);
+			text += t >= (settle[i] ?? Infinity) || !/[a-z0-9]|\p{Script=Han}/iu.test(c) ? c : glitch(c);
 		}
 		return text;
 	};

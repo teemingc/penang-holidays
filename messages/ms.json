@@ -1,0 +1,22 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"title": "API Cuti Umum Pulau Pinang",
+	"description": "Cuti umum Pulau Pinang daripada portal kerajaan negeri, sebagai API JSON percuma.",
+	"heading_lead": "Setiap cuti umum Pulau ",
+	"heading_last": "Pinang",
+	"sourced_from": "Diambil daripada ",
+	"sourced_end": ".",
+	"try_api": "Cuba API",
+	"languages": "Bahasa",
+	"copy_url": "Salin URL",
+	"copy_full_url": "Salin URL penuh",
+	"copied": "Disalin",
+	"try_it_out": "Cubalah",
+	"read_docs": "Baca dokumentasi",
+	"sending": "Menghantar",
+	"no_response": "Tiada respons",
+	"no_response_body": "Permintaan tidak sampai. Semak sambungan anda dan hantar sekali lagi.",
+	"docs_name": "seperti diterbitkan",
+	"docs_original_name": "seperti diterbitkan",
+	"docs_tentative": "boleh berubah"
+}

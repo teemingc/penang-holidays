@@ -1,4 +1,5 @@
 import { writeFile } from 'node:fs/promises';
+import { translate } from '../src/lib/names.ts';
 import { SOURCE_URL } from '../src/lib/source.ts';
 import { parseHolidayPage } from './parse.ts';
 
@@ -26,6 +27,16 @@ for (const year of requested) {
 for (const year of years) {
 	await writeJson(`${year.year}.json`, year);
 	console.log(`data/${year.year}.json: ${year.holidays.length} holidays`);
+}
+
+// the data is still written without them, the tests fail until they are added
+const untranslated = new Set(
+	years
+		.flatMap((y) => y.holidays.map((h) => h.name))
+		.filter((name) => !translate(name, 'en') || !translate(name, 'zh'))
+);
+for (const name of untranslated) {
+	console.warn(`No English or Chinese name for "${name}"; add them to src/lib/names.ts`);
 }
 
 // The portal is slow and drops connections now and then, so retry a few times

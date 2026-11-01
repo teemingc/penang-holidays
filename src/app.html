@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="%lang%">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -25,8 +25,8 @@
 				);
 				// Before noon the sun is still climbing, whichever side of a day in UTC it is
 				const morning = Math.sin(h) < 0;
-				document.documentElement.dataset.sky =
-					e < -6 * rad ? 'night' : e < 6 * rad ? (morning ? 'dawn' : 'dusk') : 'day';
+				const phase = e < -6 * rad ? 'night' : e < 6 * rad ? (morning ? 'dawn' : 'dusk') : 'day';
+				document.documentElement.dataset.sky = phase;
 				// The sky itself, blended across twilight as paletteAt does: the top and horizon of
 				// each of src/lib/sky.ts's palettes
 				const sky = {
@@ -57,7 +57,12 @@
 								? [twilight, sky.day, e / (10 * rad)]
 								: [sky.day, sky.day, 0];
 				const [top] = ['--top', '--horizon'].map((name, i) => {
-					const mixed = from[i].map((c, k) => Math.round(c + (to[i][k] - c) * t));
+					let mixed = from[i].map((c, k) => c + (to[i][k] - c) * t);
+					// keep in sync with shade in src/lib/sky.ts
+					if (phase === 'dawn' || phase === 'dusk') {
+						mixed = mixed.map((c, k) => c + ([26, 20, 56][k] - c) * 0.68);
+					}
+					mixed = mixed.map(Math.round);
 					const colour = `rgb(${mixed.join(' ')})`;
 					document.documentElement.style.setProperty(name, colour);
 					return colour;

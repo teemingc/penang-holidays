@@ -41,9 +41,33 @@ A SvelteKit app on Cloudflare Workers serves the same data, bundled from `data/`
 | `GET /2026`   | All holidays in 2026                    |
 | `GET /2026/3` | Holidays in March 2026                  |
 
-A year or month comes back as `{ "holidays": [...] }`, each holiday with the fields above. The year and month aren't repeated, since they're in the path.
+A year or month comes back as `{ "holidays": [...] }`, each holiday with the fields above, named in English unless you ask for Malay or Chinese (see [Languages](#languages)). The year and month aren't repeated, since they're in the path.
 
-Successful responses are cached for an hour, by browsers and by [Workers Cache](https://developers.cloudflare.com/workers/cache/), which answers repeat requests without running the Worker. Errors aren't cached.
+### Languages
+
+Holidays are named in English, in Malay as the portal publishes them, or in Chinese (simplified, as written in Malaysia). The API picks the language from:
+
+1. `?lang=ms`, `?lang=en` or `?lang=zh`, e.g. `GET /2026?lang=zh`. Any other value is a 400.
+2. Otherwise, the `Accept-Language` header: the first language in it that's one of these three.
+3. Otherwise, English.
+
+The response's `Content-Language` header says which it is (`ms`, `en` or `zh-Hans-MY`). A holiday named in English or Chinese keeps the portal's Malay name in `originalName`:
+
+```json
+{
+	"date": "2026-02-17",
+	"name": "农历新年",
+	"originalName": "Tahun Baru Cina",
+	"type": "federal",
+	"tentative": false
+}
+```
+
+The translations aren't official; see [Credits](#credits). A name without one yet stays in Malay, without `originalName`.
+
+The home page is in English at [`/`](https://penang-holidays.teemingc.workers.dev/) and Malay at [`/ms`](https://penang-holidays.teemingc.workers.dev/ms). Its words are in [`messages/`](messages), compiled by [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs).
+
+Successful responses are cached for an hour, by browsers and by [Workers Cache](https://developers.cloudflare.com/workers/cache/), which answers repeat requests without running the Worker. Errors aren't cached. A response whose language came from `Accept-Language` is cached once for each value of the header (`Vary: Accept-Language`); `?lang=` is cached once for everyone.
 
 ## Updating
 
@@ -85,5 +109,10 @@ General-purpose holiday libraries work out dates from rules and secondary source
 If you need more than Penang, the [holidays](https://github.com/vacanza/holidays) Python library covers a far bigger scope: countries and their subdivisions around the world, Malaysia's states among them. It's a great project, and worth a look if you need holidays beyond Penang.
 
 ## Credits
+
+The portal only names holidays in Malay. The English and Chinese names in [`src/lib/names.ts`](src/lib/names.ts) are translations, not official names:
+
+- English names come from the [holidays](https://github.com/vacanza/holidays) Python library's [English translations for Malaysia](https://github.com/vacanza/holidays/blob/v0.107/holidays/locale/en_US/LC_MESSAGES/MY.po), © Vacanza Team and individual contributors, licensed [MIT](https://github.com/vacanza/holidays/blob/v0.107/LICENSE).
+- Chinese names come from the holiday table in Chinese Wikipedia's [馬來西亞公共假期](https://zh.wikipedia.org/zh-my/馬來西亞公共假期) (Malaysian variant), by its contributors, licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 
 The Penang flag in [`src/lib/assets`](src/lib/assets) comes from [Wikimedia Commons](<https://commons.wikimedia.org/wiki/File:Flag_of_Penang_(Malaysia).svg>) and is licensed [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The favicon is a squared-up version of it.
