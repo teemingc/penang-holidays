@@ -1,14 +1,25 @@
 import { prerender } from '$app/server';
 import { getYear, years } from '#lib/holidays.js';
-import { inYear, json } from '#lib/server/response.js';
+import { isLanguage, type Language } from '#lib/languages.js';
+import { locales } from '#lib/paraglide/runtime.js';
+import { inYear, named } from '#lib/server/response.js';
 import { currentYear } from '#lib/sky.js';
 
-// Worked out at build time, which happens whenever the data changes
-export const getPage = prerender(() => {
-	const available = years.map((y) => y.year);
-	// This year when the page was built; the page moves it on to the year it's opened in
-	const year = currentYear(new Date(), available);
-	// The headers that request comes with, shown with the docs until it's sent
-	const previewHeaders = [...json(inYear(getYear(String(year))!)).headers];
-	return { year, years: available, previewHeaders };
-});
+// runs at build time, which happens whenever the data changes, once per page language
+export const getPage = prerender(
+	'unchecked',
+	(language: Language) => {
+		if (!isLanguage(language)) throw new Error(`No page in ${language}`);
+
+		const available = years.map((y) => y.year);
+		// the year at build time, the page moves it on to the year it is opened in
+		const year = currentYear(new Date(), available);
+		// headers the request comes with, shown with the docs until it is sent
+		const body = inYear(getYear(String(year))!, language);
+		// english is the default so it is requested without ?lang= and varies with Accept-Language
+		const negotiated = language === 'en';
+		const previewHeaders = [...named(body, { language, negotiated }).headers];
+		return { year, years: available, previewHeaders };
+	},
+	{ inputs: () => [...locales] }
+);

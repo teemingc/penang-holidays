@@ -264,6 +264,8 @@ export function createSmoke(
 		}
 		pictured.needsUpdate = true;
 		if (smoking) for (const words of written) words.style.color = 'transparent';
+		// ignore the baseline marks added above
+		rewritten.takeRecords();
 	}
 
 	// The header's colours change with the phase of the day: the picture follows at once
@@ -271,6 +273,11 @@ export function createSmoke(
 		if (smoking) photograph();
 	});
 	phases.observe(document.documentElement, { attributes: true, attributeFilter: ['data-sky'] });
+	// redraw when the words change language while the smoke stands in for them
+	const rewritten = new MutationObserver(() => {
+		if (smoking) photograph();
+	});
+	rewritten.observe(header, { characterData: true, childList: true, subtree: true });
 
 	// The smoke takes the header's place, drawn as it is before the header is hidden, so
 	// there's never a frame without it
@@ -453,6 +460,7 @@ export function createSmoke(
 
 		dispose() {
 			phases.disconnect();
+			rewritten.disconnect();
 			stop();
 			overlay.remove();
 			smoke.dispose();

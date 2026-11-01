@@ -9,26 +9,34 @@
 	import plex400 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url';
 	import plex600 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2?url';
 	import { onMount } from 'svelte';
+	import { onNavigate } from '$app/navigation';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
+	import type { Path } from '$app/types';
 	import Request from '#lib/Request.svelte';
 	import flag from '#lib/assets/penang-flag.svg';
 	import dawn from '#lib/assets/bridge/dawn.webp';
 	import day from '#lib/assets/bridge/day.webp';
 	import dusk from '#lib/assets/bridge/dusk.webp';
 	import night from '#lib/assets/bridge/night.webp';
-	// The page at dusk, for when it's shared; drawn by scripts/og.html
-	import og from '#lib/assets/og.png';
 	import { getPage } from '#lib/holidays.remote.js';
+	import { TAGS } from '#lib/languages.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { getLocale, locales, localizeHref } from '#lib/paraglide/runtime.js';
 	import { SOURCE_URL } from '#lib/source.js';
-	import { currentYear, now, paletteAt, phaseOf, sunAt } from '#lib/sky.js';
+	import { currentYear, now, paletteAt, phaseOf, shade, sunAt } from '#lib/sky.js';
 
-	const data = await getPage();
+	const language = $derived(getLocale());
+
+	const data = $derived(await getPage(language));
 
 	const reducedMotion = new MediaQuery('prefers-reduced-motion: reduce');
 
 	// Where the API lives
 	const ORIGIN = 'https://penang-holidays.teemingc.workers.dev';
+
+	// each language in its own name for the switcher
+	const NAMES = { en: 'English', ms: 'Melayu' };
 
 	// How many strips the little flag in the headline is cut into, to wave
 	const STRIPS = 24;
@@ -38,13 +46,35 @@
 	onMount(() => (opened = currentYear(now(), data.years)));
 	const year = $derived(opened ?? data.year);
 
-	const path = $derived(resolve('/[year]', { year: String(year) }));
+	// english is the default so it needs no ?lang=
+	const path = $derived(
+		resolve('/[year]', { year: String(year) }) + (language === 'en' ? '' : `?lang=${language}`)
+	);
 
 	// Whether the scene has drawn its first frame, to take the place of its snapshot
 	let ready = $state(false);
 
 	// Where cars fly through the words, handed to the scene
 	let header = $state<HTMLElement>();
+
+	$effect(() => {
+		document.documentElement.lang = TAGS[language];
+	});
+
+	// only the named parts are captured so the scene and the request stay live
+	// names are set only during a switch since a name puts the words behind the canvas
+	onNavigate((navigation) => {
+		if (!document.startViewTransition) return;
+		const root = document.documentElement;
+		root.classList.add('switching');
+		return new Promise((resolve) => {
+			const transition = document.startViewTransition(async () => {
+				resolve();
+				await navigation.complete;
+			});
+			transition.finished.finally(() => root.classList.remove('switching'));
+		});
+	});
 
 	const rgb = ([r, g, b]: number[]) => `rgb(${Math.round(r!)} ${Math.round(g!)} ${Math.round(b!)})`;
 
@@ -55,11 +85,14 @@
 		const update = () => {
 			const sun = sunAt(now());
 			const root = document.documentElement;
-			root.dataset.sky = phaseOf(sun);
+			const phase = phaseOf(sun);
+			root.dataset.sky = phase;
 			const { top, horizon } = paletteAt(sun);
-			root.style.setProperty('--top', rgb(top));
-			root.style.setProperty('--horizon', rgb(horizon));
-			document.querySelector('meta[name="theme-color"]')?.setAttribute('content', rgb(top));
+			root.style.setProperty('--top', rgb(shade(top, phase)));
+			root.style.setProperty('--horizon', rgb(shade(horizon, phase)));
+			document
+				.querySelector('meta[name="theme-color"]')
+				?.setAttribute('content', rgb(shade(top, phase)));
 		};
 		update();
 		const timer = setInterval(update, 60_000);
@@ -68,38 +101,26 @@
 </script>
 
 <svelte:head>
-	<title>Penang Holidays API</title>
+	<title>{m.title()}</title>
 	{#each [newsreader, schibsted, plex400, plex600] as font (font)}
 		<link rel="preload" href={font} as="font" type="font/woff2" crossorigin="anonymous" />
 	{/each}
 	<link rel="stylesheet" href={fonts} />
-	<meta
-		name="description"
-		content="Penang public holidays from the state government portal, as a free JSON API."
-	/>
-	<meta property="og:type" content="website" />
-	<meta property="og:url" content={ORIGIN} />
-	<meta property="og:title" content="Every Penang holiday" />
-	<meta
-		property="og:description"
-		content="Penang public holidays from the state government portal, as a free JSON API."
-	/>
-	<meta property="og:image" content={new URL(og, ORIGIN).href} />
-	<meta property="og:image:width" content="1200" />
-	<meta property="og:image:height" content="630" />
-	<meta
-		property="og:image:alt"
-		content="Every Penang holiday, over the Penang Bridge at dusk, with the Penang flag"
-	/>
-	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="description" content={m.description()} />
+	<!-- each language version for search engines -->
+	<link rel="canonical" href={ORIGIN + localizeHref('/')} />
+	{#each locales as locale (locale)}
+		<link rel="alternate" hreflang={TAGS[locale]} href={ORIGIN + localizeHref('/', { locale })} />
+	{/each}
+	<link rel="alternate" hreflang="x-default" href={ORIGIN + '/'} />
 </svelte:head>
 
 <div class="page">
 	<header bind:this={header}>
+		<!-- no whitespace between spans, the messages hold their own spaces since chinese has none -->
 		<h1>
-			<span class="words">Every Penang</span>
-			<span class="last"
-				><span class="words">holiday</span>
+			<span class="words">{m.heading_lead()}</span><span class="last"
+				><span class="words">{m.heading_last()}</span>
 				<!-- A little Penang flag, waving: vertical strips of it swing in perspective one after
 			     another, so a ripple runs from the hoist to the fly -->
 				<span class="flag" aria-hidden="true" style:--flag={`url("${flag}")`}>
@@ -110,7 +131,7 @@
 			>
 		</h1>
 		<p>
-			Sourced from <a href={SOURCE_URL} rel="external">penang.gov.my</a>.
+			{m.sourced_from()}<a href={SOURCE_URL} rel="external">penang.gov.my</a>{m.sourced_end()}
 		</p>
 	</header>
 
@@ -130,23 +151,45 @@
 		></div>
 	</div>
 
-	<section class="request" aria-label="Try the API">
+	<section class="request" aria-label={m.try_api()}>
 		<Request
+			{language}
 			{path}
-			url={`${ORIGIN}/${year}`}
+			url={ORIGIN + path}
 			previewHeaders={data.previewHeaders}
 			reducedMotion={reducedMotion.current}
 		/>
 	</section>
 
-	<a class="github" href="https://github.com/teemingc/penang-holidays">
-		<svg viewBox="0 0 16 16" aria-hidden="true"
-			><path
-				d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"
-			/></svg
+	<footer class="foot">
+		<!-- client navigation keeps the scene running and the scroll position -->
+		<nav class="languages" aria-label={m.languages()}>
+			{#each locales as locale (locale)}
+				<a
+					href={resolve(localizeHref('/', { locale }) as Path)}
+					hreflang={TAGS[locale]}
+					lang={TAGS[locale]}
+					aria-current={locale === language ? 'page' : undefined}
+					data-sveltekit-noscroll
+					>{NAMES[locale]}{#if locale === language}<span class="chosen" aria-hidden="true"
+						></span>{/if}</a
+				>
+			{/each}
+		</nav>
+		<!-- icon only so switching language does not shift the links beside it -->
+		<a
+			class="github"
+			href="https://github.com/teemingc/penang-holidays"
+			aria-label="Source on GitHub"
+			title="Source on GitHub"
 		>
-		Source on GitHub
-	</a>
+			<svg viewBox="0 0 16 16" aria-hidden="true"
+				><path
+					d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"
+				/></svg
+			>
+		</a>
+	</footer>
 </div>
 
 <div class="edge" aria-hidden="true"></div>
@@ -161,6 +204,8 @@
 		--ink: #f3f4f7;
 		--ink-soft: rgb(243 244 247 / 0.7);
 		--accent: #6fd0ff;
+		/* chinese serif fallback, the page fonts have no chinese */
+		--serif-cjk: 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif SC', 'SimSun';
 		color-scheme: dark;
 	}
 
@@ -218,12 +263,9 @@
 	   The foot of the screen is left to the page's colour, which is the foot of the sky:
 	   anything fixed there, Safari paints as a solid band over the page, which lags behind as
 	   its bar slides away on a scroll. The top has a strip of the top of the sky, any thinner
-	   than which Safari passes it over. On its side, there's no bar at the foot, but as the bar
-	   at the top slides away the screen grows, and the sky, clipped to the screen it had, is
-	   moved to fill it a moment late: the page's colour shows at the foot meanwhile, so it's
-	   the foot of the sky there too */
-	@media (max-width: 900px) and (orientation: portrait),
-		(orientation: landscape) and (max-height: 500px) {
+	   than which Safari passes it over. On its side, there's no bar at the foot, and the page's
+	   colour is the top of the sky */
+	@media (max-width: 900px) and (orientation: portrait) {
 		:global(:root) {
 			background: var(--horizon);
 		}
@@ -237,6 +279,18 @@
 			height: 12px;
 			background: var(--top);
 			pointer-events: none;
+		}
+	}
+
+	/* On its side, as Safari's bar slides away the screen grows, and the sky is moved to fill
+	   it a moment late, leaving the page's colour, the top of the sky, in a dark strip at the
+	   foot. With no bar at the foot to paint it as a band, the sky can reach past both edges
+	   of the screen, in its own colours, to cover whatever's uncovered */
+	@media (orientation: landscape) and (max-height: 500px) {
+		:global(body::before) {
+			top: -50lvh;
+			height: 200lvh;
+			background: linear-gradient(var(--top) 25%, var(--horizon) 75%);
 		}
 	}
 
@@ -279,7 +333,7 @@
 
 	h1 {
 		margin: 0;
-		font-family: 'Newsreader Variable', Georgia, serif;
+		font-family: 'Newsreader Variable', Georgia, var(--serif-cjk), serif;
 		font-weight: 600;
 		font-size: clamp(2.75rem, 5vw, 5.25rem);
 		line-height: 1.08;
@@ -382,7 +436,7 @@
 
 	header p {
 		margin: 1rem 0 0;
-		font-family: 'Newsreader Variable', Georgia, serif;
+		font-family: 'Newsreader Variable', Georgia, var(--serif-cjk), serif;
 		font-weight: 450;
 		font-size: clamp(1.375rem, 2.1vw, 1.875rem);
 		line-height: 1.4;
@@ -459,28 +513,6 @@
 		}
 	}
 
-	/* At dawn and dusk the sky low down is too light for light type and too dark for dark,
-	   so from just above the request to the foot of the page there's a shade of evening,
-	   coming on slowly over the sea above it, eased so it has no edge, and reaching the
-	   edges of the screen */
-	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page::before {
-		content: '';
-		grid-column: request;
-		grid-row: request / -1;
-		/* The same slow, eased fade from above and, beside the bridge, from the left, where it
-		   reaches well back over the sea so there's no line down the page */
-		--ease:
-			transparent, rgb(0 0 0 / 0.04) 2rem, rgb(0 0 0 / 0.14) 4rem, rgb(0 0 0 / 0.3) 6rem,
-			rgb(0 0 0 / 0.52) 8rem, rgb(0 0 0 / 0.76) 10rem, rgb(0 0 0 / 0.93) 12rem, #000 13rem;
-		margin: calc(var(--drop) - 14rem) calc(-1 * var(--right)) calc(-1 * var(--bottom)) -16rem;
-		background: rgb(26 20 56 / 0.68);
-		mask-image: linear-gradient(var(--ease)), linear-gradient(to right, var(--ease));
-		mask-composite: intersect;
-		/* Masked, it's a layer of its own, which would cover the type after it in the page */
-		z-index: -1;
-		pointer-events: none;
-	}
-
 	/* Level with the bridge, and filling the rest of the column so the response has room
 	   without the page moving */
 	.request {
@@ -491,39 +523,165 @@
 		padding-top: var(--drop);
 	}
 
-	.github {
+	.foot {
 		grid-area: github;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: flex-end;
-		gap: 0.5rem;
+		gap: 0.5rem 1.75rem;
 		padding-top: 1rem;
 		/* In the serif of the line under the title, which it answers */
-		font-family: 'Newsreader Variable', Georgia, serif;
+		font-family: 'Newsreader Variable', Georgia, var(--serif-cjk), serif;
 		font-weight: 450;
 		font-size: 1.0625rem;
+	}
+
+	.foot a {
 		color: var(--ink-soft);
 		text-decoration: none;
 	}
 
 	/* Small, so it takes the full ink in the evening shade */
-	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .github {
+	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .foot a {
 		color: var(--ink);
 	}
 
-	.github:hover {
+	.foot a:hover {
 		color: var(--ink);
+	}
+
+	.languages {
+		display: flex;
+		gap: 1rem;
+	}
+
+	.languages a {
+		position: relative;
+		transition: color 0.2s ease;
+	}
+
+	/* a separate line so it can move to the next chosen language */
+	.languages [aria-current='page'] {
+		color: var(--ink);
+	}
+
+	.chosen {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0.05em;
+		height: 1px;
+		background: currentColor;
+	}
+
+	/* named only during a language switch, see onNavigate */
+	:global(:root.switching) {
+		view-transition-name: none;
+	}
+
+	:global(:root.switching) h1 {
+		view-transition-name: heading;
+	}
+
+	:global(:root.switching) header p {
+		view-transition-name: sourced;
+	}
+
+	:global(:root.switching) .flag {
+		view-transition-name: flag;
+	}
+
+	:global(:root.switching) .chosen {
+		view-transition-name: chosen;
+	}
+
+	/* let clicks through the view transition overlay */
+	:global(::view-transition) {
+		pointer-events: none;
+	}
+
+	/* old and new words keep their own size from the line start instead of stretching */
+	:global(::view-transition-old(heading)),
+	:global(::view-transition-new(heading)),
+	:global(::view-transition-old(sourced)),
+	:global(::view-transition-new(sourced)) {
+		inline-size: auto;
+		block-size: auto;
+	}
+
+	:global(::view-transition-old(heading)),
+	:global(::view-transition-old(sourced)) {
+		animation: words-out 150ms cubic-bezier(0.19, 1, 0.22, 1) both;
+	}
+
+	:global(::view-transition-new(heading)),
+	:global(::view-transition-new(sourced)) {
+		animation: words-in 240ms cubic-bezier(0.19, 1, 0.22, 1) both;
+	}
+
+	@keyframes -global-words-out {
+		to {
+			opacity: 0;
+			filter: blur(2px);
+		}
+	}
+
+	@keyframes -global-words-in {
+		from {
+			opacity: 0;
+			filter: blur(2px);
+			transform: translateY(4px);
+		}
+	}
+
+	:global(::view-transition-group(flag)),
+	:global(::view-transition-group(chosen)) {
+		animation-duration: 250ms;
+		animation-timing-function: cubic-bezier(0.645, 0.045, 0.355, 1);
+	}
+
+	/* reduced motion only fades the words */
+	@media (prefers-reduced-motion: reduce) {
+		:global(::view-transition-old(heading)),
+		:global(::view-transition-old(sourced)) {
+			animation: fade-out 150ms ease both;
+		}
+
+		:global(::view-transition-new(heading)),
+		:global(::view-transition-new(sourced)) {
+			animation: fade-in 200ms ease both;
+		}
+
+		:global(::view-transition-group(flag)),
+		:global(::view-transition-group(chosen)) {
+			animation-duration: 0s;
+		}
+	}
+
+	@keyframes -global-fade-out {
+		to {
+			opacity: 0;
+		}
+	}
+
+	@keyframes -global-fade-in {
+		from {
+			opacity: 0;
+		}
+	}
+
+	.github {
+		display: flex;
 	}
 
 	.github svg {
-		width: 1rem;
-		height: 1rem;
+		width: 1.125rem;
+		height: 1.125rem;
 		fill: currentColor;
 	}
 
-	/* Narrow, the page is stacked, except on a phone on its side, which keeps the columns */
-	@media (max-width: 900px) and (orientation: portrait),
-		(max-width: 900px) and (min-height: 501px) {
+	@media (max-width: 900px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr);
 			/* The link sits at the foot of the screen, however short the page */
@@ -551,91 +709,17 @@
 		   bridge still runs edge to edge */
 		header,
 		.request,
-		.github {
+		.foot {
 			justify-self: center;
 			width: 100%;
 			max-width: 32rem;
 		}
 
-		/* Across the whole screen, so only its top edge is soft. Below the link the shade
-		   clears, along an eased curve so there's no line where it starts or ends, to leave the
-		   sky fixed behind the page: what Safari shows past the end of the page, pulled past it,
-		   and, as the page's own colour, under its bar */
-		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page {
-			--bottom: calc(max(1.5rem, env(safe-area-inset-bottom)) + 4rem);
-		}
-
-		:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .page::before {
-			--shade: rgb(26 20 56 / 0.68);
-			grid-column: 1 / -1;
-			margin-inline: calc(-1 * var(--left)) calc(-1 * var(--right));
-			background: linear-gradient(
-				to top,
-				transparent,
-				color-mix(in srgb, transparent 93%, var(--shade)) calc(var(--bottom) / 6),
-				color-mix(in srgb, transparent 74%, var(--shade)) calc(var(--bottom) * 2 / 6),
-				color-mix(in srgb, transparent 50%, var(--shade)) calc(var(--bottom) * 3 / 6),
-				color-mix(in srgb, transparent 26%, var(--shade)) calc(var(--bottom) * 4 / 6),
-				color-mix(in srgb, transparent 7%, var(--shade)) calc(var(--bottom) * 5 / 6),
-				var(--shade) var(--bottom)
-			);
-			mask-image: linear-gradient(var(--ease));
-		}
-
 		/* Hung from the same edge as everything above it */
-		.github {
+		.foot {
 			align-self: end;
 			justify-content: flex-start;
 			padding-top: 1.5rem;
-		}
-	}
-
-	/* A phone on its side is as short as a letterbox, so rather than squeeze into it, the page
-	   scrolls: the request takes a column as tall as its docs, and the title sits over the
-	   bridge in the other. The bridge fills the rest of the first screen and no more, about
-	   7rem under the title, however long the docs make the page: stretched to their height, it
-	   would draw a sea as tall as the page. The link to the code waits under the docs, where
-	   it does on a wider screen */
-	@media (orientation: landscape) and (max-height: 500px) {
-		.page {
-			grid-template-columns: minmax(0, 1fr) 21rem;
-			grid-template-rows: auto max(60svh, 100svh - 7rem) 1fr auto;
-			grid-template-areas:
-				'header request'
-				'scene request'
-				'. request'
-				'. github';
-			column-gap: 2rem;
-			--gutter: 1.5rem;
-			--drop: 0px;
-			height: auto;
-			min-height: 100dvh;
-			overflow: visible;
-			padding-top: 1.25rem;
-		}
-
-		/* The title is sized to keep to one line across its column, about 11.6em with the
-		   flag, and to the height of the screen, which is what's short */
-		header {
-			container-type: inline-size;
-		}
-
-		/* It sits on the same baseline as the request beside it: in Newsreader the baseline
-		   is 0.78em down its line, and in the request's IBM Plex Mono, at the size set in
-		   src/lib/Request.svelte, 0.975em down */
-		h1 {
-			margin-top: calc(0.975 * clamp(1.5rem, 2.3vw, 2rem) - 0.78em);
-			font-size: clamp(1.75rem, min(10svh, 100cqi / 11.6), 2.75rem);
-		}
-
-		header p {
-			margin-top: 0.5rem;
-			font-size: clamp(1.0625rem, 5svh, 1.25rem);
-		}
-
-		/* Clear of the request beside it, which the feathered edge leads into */
-		.scene {
-			margin: 0.5rem 0 0 calc(-1 * var(--left));
 		}
 	}
 </style>

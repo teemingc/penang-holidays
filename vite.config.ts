@@ -1,3 +1,4 @@
+import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { defineConfig } from 'vitest/config';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -14,6 +15,22 @@ export default defineConfig({
 			},
 			adapter: adapter(),
 			experimental: { remoteFunctions: true }
+		}),
+		// only the page is localised, / in english and /ms in malay, api paths stay as they are
+		paraglideVitePlugin({
+			project: './project.inlang',
+			outdir: './src/lib/paraglide',
+			emitTsDeclarations: true,
+			strategy: ['url', 'baseLocale'],
+			urlPatterns: [
+				{
+					pattern: '/',
+					localized: [
+						['ms', '/ms'],
+						['en', '/']
+					]
+				}
+			]
 		})
 	],
 	// A port of its own, so it never lands on another project's dev server

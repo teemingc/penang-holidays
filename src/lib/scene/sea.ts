@@ -6,8 +6,6 @@ const CELL_W = 9;
 const CELL_H = 15;
 const LEVELS = 4;
 const RIPPLE_LIFE = 2.8;
-// The order the ripples' pixels drop out in as a ripple fades
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
 const waves = (x: number, z: number, t: number) =>
 	Math.sin(x * 0.045 + t * 1.1 + Math.sin(z * 0.03) * 2) * 0.5 +
@@ -29,8 +27,6 @@ export function createSea(ocean: HTMLCanvasElement, camera: THREE.Camera, lampHe
 	let width = 0;
 	let height = 0;
 	let ink = '#fff';
-	// The ripples' pixels, as near the weight of the type's strokes as whole screen pixels allow
-	let pixel = 1.5;
 	// The bridge's shadow on the sea, cast from the sun, and whether the sea's ink is dark
 	// (so shade is denser type) or light (so shade is sparser)
 	const sunward = new THREE.Vector3(0, 1, 0);
@@ -120,28 +116,6 @@ export function createSea(ocean: HTMLCanvasElement, camera: THREE.Camera, lampHe
 		}
 	}
 
-	// One ring of pixels on the water, radius r about (x, z), in `colour`, as strong as
-	// `alpha` where the type around it is at its strongest and fainter where it fades, with
-	// fewer of its pixels left the less of it there is
-	const drawn = new Set<number>();
-	function ring(x: number, z: number, r: number, left: number, colour: string, alpha: number) {
-		sea.fillStyle = colour;
-		drawn.clear();
-		for (let a = 0; a < 480; a++) {
-			const angle = (a / 480) * Math.PI * 2;
-			projected.set(x + Math.cos(angle) * r, 0, z + Math.sin(angle) * r).project(camera);
-			const gx = Math.floor((((projected.x + 1) / 2) * width) / pixel);
-			const gy = Math.floor((((1 - projected.y) / 2) * height) / pixel);
-			const key = gy * 65536 + gx;
-			if (drawn.has(key) || BAYER[(gy & 3) * 4 + (gx & 3)]! / 16 >= left * left * 1.4) continue;
-			drawn.add(key);
-			const cell =
-				Math.floor((gy * pixel) / CELL_H) * cells.cols + Math.floor((gx * pixel) / CELL_W);
-			sea.globalAlpha = (Math.max(1, cells.level[cell] ?? 1) / LEVELS) * alpha;
-			sea.fillRect(gx * pixel, gy * pixel, pixel, pixel);
-		}
-	}
-
 	return {
 		/** Sized to the scene, w by h CSS pixels, once the camera has been */
 		resize(w: number, h: number, ratio: number) {
@@ -152,7 +126,6 @@ export function createSea(ocean: HTMLCanvasElement, camera: THREE.Camera, lampHe
 			ocean.style.width = `${w}px`;
 			ocean.style.height = `${h}px`;
 			sea.setTransform(ratio, 0, 0, ratio, 0, 0);
-			pixel = Math.max(1, Math.round(1.5 * ratio)) / ratio;
 			// Plex Mono is 0.6em wide, so each character fills one cell
 			sea.font = `${CELL_W / 0.6}px 'IBM Plex Mono', ui-monospace, monospace`;
 			sea.textBaseline = 'middle';
@@ -245,20 +218,28 @@ export function createSea(ocean: HTMLCanvasElement, camera: THREE.Camera, lampHe
 				sea.restore();
 			}
 
-			// Rings spreading out across the water from anything that's gone in, a few to each,
-			// set in coarse pixels like the type is set in cells, and fading by dropping pixels
-			// in a dither rather than by turning translucent. Like a real ripple each is seen by
-			// the light it catches: a pale line along its crest, lamplight by night, and on a
-			// light sea a fainter dark one in the trough just inside
-			const crest = lit ? '#ffd08a' : '#ffffff';
+			// Rings spreading out across the water from anything that's gone in, a few to each
+			sea.strokeStyle = ink;
 			for (const splash of splashes) {
 				for (let k = 0; k < 3; k++) {
 					const age = seconds - splash.at - k * 0.35;
 					if (age <= 0 || age > RIPPLE_LIFE) continue;
 					const left = 1 - age / RIPPLE_LIFE;
 					const r = 2.5 + age * 9;
-					ring(splash.x, splash.z, r, left, crest, 0.55);
-					if (darkInk && r > 3) ring(splash.x, splash.z, r - 1.6, left, ink, 0.18);
+					sea.globalAlpha = left * left * 0.75;
+					sea.lineWidth = 0.6 + left;
+					sea.beginPath();
+					for (let a = 0; a <= 48; a++) {
+						const angle = (a / 48) * Math.PI * 2;
+						projected
+							.set(splash.x + Math.cos(angle) * r, 0, splash.z + Math.sin(angle) * r)
+							.project(camera);
+						const px = ((projected.x + 1) / 2) * width;
+						const py = ((1 - projected.y) / 2) * height;
+						if (a) sea.lineTo(px, py);
+						else sea.moveTo(px, py);
+					}
+					sea.stroke();
 				}
 			}
 		}

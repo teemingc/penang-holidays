@@ -1,6 +1,8 @@
 <script lang="ts">
 	interface Props {
-		/** The path to request, such as /2026 */
+		/** language of the page, also used to name the holidays */
+		language: Language;
+		/** path to request, such as /2026?lang=ms */
 		path: string;
 		/** The full URL it's at, to show */
 		url: string;
@@ -9,29 +11,35 @@
 		reducedMotion: boolean;
 	}
 
-	import { onDestroy } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import type { Language } from './languages.js';
+	import { m } from './paraglide/messages.js';
 	import { morpher, scrambler, tokenize, type Token } from './terminal.js';
 
-	let { path, url, previewHeaders, reducedMotion }: Props = $props();
+	let { language, path, url, previewHeaders, reducedMotion }: Props = $props();
 
 	// Shown as just the path; Copy gives the full URL
 	const endpoint = $derived(url.slice(new URL(url).origin.length));
 	// With the docs, the path says which parts are yours to choose; sent, it's the one requested
-	const TEMPLATE = '/{year}';
+	const TEMPLATE = $derived(`/{year}${language === 'en' ? '' : `?lang=${language}`}`);
 
 	// What each field of the response means, in the order they come, shown until the request's
 	// sent and again whenever they're asked for. Short enough to fit a phone without wrapping
-	const DOCS = `{
+	// english and chinese names come with the malay originalName
+	const originalName = $derived(
+		language === 'ms' ? '' : `\n      "originalName": string,  // ${m.docs_original_name()}`
+	);
+	const DOCS = $derived(`{
   "holidays": [
     {
       "date": string,  // YYYY-MM-DD
-      "name": string,  // in Malay
+      "name": string,  // ${m.docs_name()}${originalName}
       "type": "federal" | "state",
-      "tentative": boolean  // date may move
+      "tentative": boolean  // ${m.docs_tentative()}
     }
   ]
-}`;
+}`);
 
 	let stage = $state<'idle' | 'sending' | 'done'>('idle');
 	// The docs, or the response to the last request
@@ -41,7 +49,12 @@
 	let headers: [string, string][] = [];
 
 	// The headers worth showing, in this order
-	const SHOWN = ['content-type', 'cache-control', 'access-control-allow-origin'];
+	const SHOWN = [
+		'content-type',
+		'content-language',
+		'cache-control',
+		'access-control-allow-origin'
+	];
 	const pick = (get: (name: string) => string | null | undefined) =>
 		SHOWN.flatMap((name) => {
 			const value = get(name);
@@ -54,7 +67,9 @@
 
 	// The body, status line and headers as they're drawn, scrambling as they change. The real
 	// values above are what's read out
+	// svelte-ignore state_referenced_locally
 	let shown = $state(DOCS);
+	// svelte-ignore state_referenced_locally
 	let shownPath = $state(TEMPLATE);
 	let shownStatus = $state('');
 	let shownTime = $state('');
@@ -153,9 +168,9 @@
 			})
 			.catch(() => {
 				elapsed = Math.round(performance.now() - started);
-				status = 'No response';
+				status = m.no_response();
 				headers = [];
-				return 'The request didn’t get through. Check your connection and send it again.';
+				return m.no_response_body();
 			});
 		stage = 'done';
 		view = 'response';
@@ -169,7 +184,16 @@
 	}
 
 	const tokens = $derived(tokenize(shown));
-	const docsTokens = tokenize(DOCS);
+	const docsTokens = $derived(tokenize(DOCS));
+
+	// on a language switch the docs glitch into the new words, or a shown response is fetched again
+	// svelte-ignore state_referenced_locally
+	let named = language;
+	$effect(() => {
+		if (language === named) return;
+		named = language;
+		untrack(() => (view === 'docs' ? readDocs() : send()));
+	});
 </script>
 
 <div class="request">
@@ -200,10 +224,10 @@
 		<div class="command">
 			{@render command()}
 			<!-- Copy sits with the path it copies; the icon swaps to a tick in place -->
-			<button class="copy" onclick={copy} aria-label="Copy the URL" title="Copy the full URL">
+			<button class="copy" onclick={copy} aria-label={m.copy_url()} title={m.copy_full_url()}>
 				{@render icons()}
 			</button>
-			<span class="visually-hidden" role="status">{copied ? 'Copied' : ''}</span>
+			<span class="visually-hidden" role="status">{copied ? m.copied() : ''}</span>
 		</div>
 
 		<!-- The request, mirrored in the sea below it and broken up by ripples -->
@@ -244,11 +268,11 @@
 			class="send"
 			onclick={view === 'docs' ? send : readDocs}
 			disabled={stage === 'sending'}
-			aria-label={view === 'docs' ? 'Send request' : 'Read docs'}
+			aria-label={view === 'docs' ? m.try_it_out() : m.read_docs()}
 		>
 			<span class={['label', { gone: view !== 'docs' }]} aria-hidden="true">
 				<span class="keycap">↵</span>
-				Send request
+				{m.try_it_out()}
 			</span>
 			<span class={['label', { gone: view === 'docs' }]} aria-hidden="true">
 				<!-- An open book, drawn in the same hairline as the copy icon -->
@@ -260,7 +284,7 @@
 						<path d="M8 4.25v9.25" />
 					</svg>
 				</span>
-				Read docs
+				{m.read_docs()}
 			</span>
 		</button>
 		{#if shownStatus}
@@ -301,7 +325,7 @@
 	</div>
 	<!-- Read out once when the response arrives, not as it streams in -->
 	<span class="visually-hidden" role="status"
-		>{stage === 'sending' ? 'Sending' : stage === 'done' ? `${status}, ${elapsed} ms` : ''}</span
+		>{stage === 'sending' ? m.sending() : stage === 'done' ? `${status}, ${elapsed} ms` : ''}</span
 	>
 </div>
 
@@ -560,9 +584,8 @@
 	/* Stacked, as tall as the docs, so there's no gap under them and nothing moves when the
 	   response arrives: a longer one scrolls. The unseen copy sets the height, and the
 	   response, sized to contain nothing, fills it. The fade falls in the room left under the
-	   last line, which shows in full once it's scrolled to. A phone on its side, too short to
-	   hold the docs, does the same, and the page scrolls to them */
-	@media (max-width: 900px), (orientation: landscape) and (max-height: 500px) {
+	   last line, which shows in full once it's scrolled to */
+	@media (max-width: 900px) {
 		.terminal {
 			grid-template-rows: auto;
 			mask-image: linear-gradient(#000 calc(100% - 1.5rem), transparent);
