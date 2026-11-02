@@ -19,6 +19,8 @@
 	import day from '#lib/assets/bridge/day.webp';
 	import dusk from '#lib/assets/bridge/dusk.webp';
 	import night from '#lib/assets/bridge/night.webp';
+	// The page at dusk, for when it's shared; drawn by scripts/og.html
+	import og from '#lib/assets/og.png';
 	import { getPage } from '#lib/holidays.remote.js';
 	import { TAGS } from '#lib/languages.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -107,6 +109,19 @@
 	{/each}
 	<link rel="stylesheet" href={fonts} />
 	<meta name="description" content={m.description()} />
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content={ORIGIN + localizeHref('/')} />
+	<meta property="og:title" content={m.heading_lead() + m.heading_last()} />
+	<meta property="og:description" content={m.description()} />
+	<!-- the image is in english whatever the language of the page -->
+	<meta property="og:image" content={new URL(og, ORIGIN).href} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta
+		property="og:image:alt"
+		content="Every Penang holiday, over the Penang Bridge at dusk, with the Penang flag"
+	/>
+	<meta name="twitter:card" content="summary_large_image" />
 	<!-- each language version for search engines -->
 	<link rel="canonical" href={ORIGIN + localizeHref('/')} />
 	{#each locales as locale (locale)}
