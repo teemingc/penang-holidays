@@ -584,8 +584,9 @@
 	/* Stacked, as tall as the docs, so there's no gap under them and nothing moves when the
 	   response arrives: a longer one scrolls. The unseen copy sets the height, and the
 	   response, sized to contain nothing, fills it. The fade falls in the room left under the
-	   last line, which shows in full once it's scrolled to */
-	@media (max-width: 900px) {
+	   last line, which shows in full once it's scrolled to. A phone on its side, too short to
+	   hold the docs, does the same, and the page scrolls to them */
+	@media (max-width: 900px), (orientation: landscape) and (max-height: 500px) {
 		.terminal {
 			grid-template-rows: auto;
 			mask-image: linear-gradient(#000 calc(100% - 1.5rem), transparent);

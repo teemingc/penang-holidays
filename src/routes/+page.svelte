@@ -681,7 +681,9 @@
 		fill: currentColor;
 	}
 
-	@media (max-width: 900px) {
+	/* Narrow, the page is stacked, except on a phone on its side, which keeps the columns */
+	@media (max-width: 900px) and (orientation: portrait),
+		(max-width: 900px) and (min-height: 501px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr);
 			/* The link sits at the foot of the screen, however short the page */
@@ -720,6 +722,55 @@
 			align-self: end;
 			justify-content: flex-start;
 			padding-top: 1.5rem;
+		}
+	}
+
+	/* A phone on its side is as short as a letterbox, so rather than squeeze into it, the page
+	   scrolls: the request takes a column as tall as its docs, and the title sits over the
+	   bridge in the other. The bridge fills the rest of the first screen and no more, about
+	   7rem under the title, however long the docs make the page: stretched to their height, it
+	   would draw a sea as tall as the page. The languages and the link to the code wait under
+	   the docs, where they do on a wider screen */
+	@media (orientation: landscape) and (max-height: 500px) {
+		.page {
+			grid-template-columns: minmax(0, 1fr) 21rem;
+			grid-template-rows: auto max(60svh, 100svh - 7rem) 1fr auto;
+			grid-template-areas:
+				'header request'
+				'scene request'
+				'. request'
+				'. github';
+			column-gap: 2rem;
+			--gutter: 1.5rem;
+			--drop: 0px;
+			height: auto;
+			min-height: 100dvh;
+			overflow: visible;
+			padding-top: 1.25rem;
+		}
+
+		/* The title is sized to keep to one line across its column, about 11.6em with the
+		   flag, and to the height of the screen, which is what's short */
+		header {
+			container-type: inline-size;
+		}
+
+		/* It sits on the same baseline as the request beside it: in Newsreader the baseline
+		   is 0.78em down its line, and in the request's IBM Plex Mono, at the size set in
+		   src/lib/Request.svelte, 0.975em down */
+		h1 {
+			margin-top: calc(0.975 * clamp(1.5rem, 2.3vw, 2rem) - 0.78em);
+			font-size: clamp(1.75rem, min(10svh, 100cqi / 11.6), 2.75rem);
+		}
+
+		header p {
+			margin-top: 0.5rem;
+			font-size: clamp(1.0625rem, 5svh, 1.25rem);
+		}
+
+		/* Clear of the request beside it, which the feathered edge leads into */
+		.scene {
+			margin: 0.5rem 0 0 calc(-1 * var(--left));
 		}
 	}
 </style>
