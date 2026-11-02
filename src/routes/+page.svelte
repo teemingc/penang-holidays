@@ -207,8 +207,6 @@
 	</footer>
 </div>
 
-<div class="edge" aria-hidden="true"></div>
-
 <style>
 	/* The sky over Penang right now: night, dawn, day or dusk. The sky's own colours here are
 	   only for a page without scripts, which is always night: otherwise --top and --horizon are
@@ -269,31 +267,14 @@
 		background: linear-gradient(var(--top), var(--horizon) 100svh);
 	}
 
-	.edge {
-		display: none;
-	}
-
 	/* On a phone held upright, Safari shows the page's own colour under its bars, past the
-	   sky, and tints them with it, unless something fixed along that edge gives it another.
-	   The foot of the screen is left to the page's colour, which is the foot of the sky:
-	   anything fixed there, Safari paints as a solid band over the page, which lags behind as
-	   its bar slides away on a scroll. The top has a strip of the top of the sky, any thinner
-	   than which Safari passes it over. On its side, there's no bar at the foot, and the page's
+	   sky, and tints them with it, so it's the foot of the sky. Nothing is fixed along either
+	   edge: Safari paints anything there as a solid band over the page, instead of letting the
+	   page scroll beneath its bars. On its side, there's no bar at the foot, and the page's
 	   colour is the top of the sky */
 	@media (max-width: 900px) and (orientation: portrait) {
 		:global(:root) {
 			background: var(--horizon);
-		}
-
-		.edge {
-			display: block;
-			position: fixed;
-			top: 0;
-			left: 0;
-			right: 0;
-			height: 12px;
-			background: var(--top);
-			pointer-events: none;
 		}
 	}
 
