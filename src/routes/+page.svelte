@@ -291,11 +291,22 @@
 	}
 
 	/* A bigger screen on its side, like a folding phone's, has Safari's bars down a side and
-	   along the foot. Safari fills them with the page's own colour, solid, never the sky's
-	   gradient, so it's the horizon, which the foot of the sky meets */
+	   along the foot. Safari cuts anything fixed off at their edges, but draws the page itself
+	   beneath them, so the sky is part of the page there, from its top to its foot, rather than
+	   fixed to the screen. Where Safari draws no page, beside its bar down the side, it fills
+	   the strip with the page's own colour, solid, so it's the horizon */
 	@media (orientation: landscape) and (pointer: coarse) and (min-height: 501px) {
 		:global(:root) {
 			background: var(--horizon);
+		}
+		:global(body) {
+			position: relative;
+		}
+		:global(body::before) {
+			position: absolute;
+			inset: 0;
+			height: auto;
+			background: linear-gradient(var(--top), var(--horizon));
 		}
 	}
 
