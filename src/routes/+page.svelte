@@ -281,10 +281,14 @@
 	/* On its side, as Safari's bar slides away the screen grows, and the sky is moved to fill
 	   it a moment late, leaving the page's colour, the top of the sky, in a dark strip at the
 	   foot. With no bar at the foot to paint it as a band, the sky can reach past both edges
-	   of the screen, in its own colours, to cover whatever's uncovered */
-	@media (orientation: landscape) and (max-height: 500px) {
+	   of the screen, in its own colours, to cover whatever's uncovered. A bigger screen on its
+	   side, like a folding phone's, has Safari's bars down the left and along the foot, over
+	   the page's colour, so the sky reaches past the sides too */
+	@media (orientation: landscape) and (pointer: coarse) {
 		:global(body::before) {
 			top: -50lvh;
+			left: -50lvw;
+			right: -50lvw;
 			height: 200lvh;
 			background: linear-gradient(var(--top) 25%, var(--horizon) 75%);
 		}
