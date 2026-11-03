@@ -641,9 +641,9 @@
 	}
 
 	/* Narrow, the page is stacked, except on a phone on its side, which keeps the columns. A
-	   folding phone's cover screen on its side is as short, but nearly square, too narrow
-	   for two columns, so it's stacked too */
-	@media (max-width: 900px) and (max-aspect-ratio: 3/2),
+	   folding phone's cover screen on its side is as short, but squarer than 16:9 as the
+	   folding phone's sky above is, too narrow for two columns, so it's stacked too */
+	@media (max-width: 900px) and (max-aspect-ratio: 16/9),
 		(max-width: 900px) and (min-height: 501px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr);
@@ -701,7 +701,7 @@
 	   and no more, about 9rem under the languages and the title, however long the docs make
 	   the page: stretched to their height, it would draw a sea as tall as the page. The link
 	   to the code waits under the docs, where it does on a wider screen */
-	@media (max-height: 500px) and (min-aspect-ratio: 1501/1000) {
+	@media (max-height: 500px) and (min-aspect-ratio: 1601/900) {
 		.page {
 			grid-template-columns: minmax(0, 1fr) 21rem;
 			grid-template-rows: auto auto max(60svh, 100svh - 9rem) 1fr auto;
