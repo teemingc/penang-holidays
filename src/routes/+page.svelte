@@ -313,6 +313,19 @@
 			height: auto;
 			background: linear-gradient(var(--top), var(--horizon));
 		}
+
+		/* Above the top of the page, where pulling it down to reload shows, the sky carries
+		   on in the colour of its top, rather than the page's own colour, the horizon */
+		:global(body::after) {
+			content: '';
+			position: absolute;
+			bottom: 100%;
+			left: 0;
+			right: 0;
+			height: 100lvh;
+			z-index: -1;
+			background: var(--top);
+		}
 	}
 
 	.page {
