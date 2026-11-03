@@ -299,8 +299,11 @@
 			background: var(--horizon);
 		}
 
+		/* At least as tall as the screen with Safari's bar slid away, so the sky doesn't
+		   stretch as the bar comes and goes */
 		:global(body) {
 			position: relative;
+			min-height: 100lvh;
 		}
 
 		:global(body::before) {
