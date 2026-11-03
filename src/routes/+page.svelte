@@ -291,10 +291,15 @@
 	}
 
 	/* A folding phone on its side, squarer than a phone's screen though as short, has
-	   Safari's bars down a side and along the top, filled solid with the page's own colour, the
-	   top of the sky, and a glass bar at the foot, over the page. Safari cuts a fixed layer off
-	   at its bars, so the sky is part of the page there, drawn all the way beneath the glass */
+	   Safari's bar down a side, filled solid with the page's own colour, and a glass bar at the
+	   foot, over the page. The page's colour is the horizon, as it is upright, so the bar and
+	   whatever shows past the foot of the page meet the foot of the sky. Safari cuts a fixed
+	   layer off at its bars, so the sky is part of the page there, drawn beneath the glass */
 	@media (orientation: landscape) and (pointer: coarse) and (max-aspect-ratio: 16/9) {
+		:global(:root) {
+			background: var(--horizon);
+		}
+
 		/* At least as tall as the screen with Safari's bar slid away, so the sky doesn't
 		   stretch as the bar comes and goes */
 		:global(body) {
