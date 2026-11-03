@@ -297,9 +297,13 @@
 	.page {
 		/* How far below the top of its area the request starts */
 		--drop: clamp(0.5rem, 9vh, 6rem);
-		/* Safari keeps the page clear of a notch or a status bar itself, so what bleeds to the
-		   edges, bleeds by the gutter */
+		/* The page reaches every edge of the screen (viewport-fit=cover in src/app.html), so
+		   the gutters widen to keep the words clear of a notch or the corners of a phone on its
+		   side; what bleeds to the edges, bleeds by as much */
 		--gutter: 2.5rem;
+		--left: max(var(--gutter), env(safe-area-inset-left));
+		--right: max(var(--gutter), env(safe-area-inset-right));
+		--bottom: max(1.5rem, env(safe-area-inset-bottom));
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
 		grid-template-rows: auto minmax(0, 1fr) auto;
@@ -309,7 +313,7 @@
 			'. github';
 		column-gap: 3rem;
 		height: 100dvh;
-		padding: 2.5rem var(--gutter) 1.5rem;
+		padding: 2.5rem var(--right) var(--bottom) var(--left);
 		box-sizing: border-box;
 		overflow: hidden;
 	}
@@ -462,7 +466,7 @@
 	.scene {
 		grid-area: scene;
 		min-height: 0;
-		margin: 0.5rem calc(-1 * var(--gutter)) 0 calc(-1 * var(--gutter));
+		margin: 0.5rem calc(-1 * var(--right)) 0 calc(-1 * var(--left));
 		position: relative;
 		/* Sized by the page, never by what's in it, so the still can follow its shape */
 		container-type: size;
@@ -695,7 +699,7 @@
 		.scene {
 			height: 75vw;
 			max-height: 30rem;
-			margin: 1.5rem calc(-1 * var(--gutter)) 1.5rem calc(-1 * var(--gutter));
+			margin: 1.5rem calc(-1 * var(--right)) 1.5rem calc(-1 * var(--left));
 		}
 
 		.page {
@@ -766,7 +770,7 @@
 
 		/* Clear of the request beside it, which the feathered edge leads into */
 		.scene {
-			margin: 0.5rem 0 0 calc(-1 * var(--gutter));
+			margin: 0.5rem 0 0 calc(-1 * var(--left));
 		}
 	}
 </style>
