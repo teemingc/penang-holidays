@@ -131,6 +131,21 @@
 </svelte:head>
 
 <div class="page">
+	<!-- first, so it is to hand as the page opens. client navigation without a reset keeps
+     the scene running, the scroll position and focus -->
+	<nav class="languages" aria-label={m.languages()}>
+		{#each locales as locale (locale)}
+			<a
+				href={resolve(localizeHref('/', { locale }) as Path)}
+				hreflang={TAGS[locale]}
+				lang={TAGS[locale]}
+				aria-current={locale === language ? 'page' : undefined}
+				data-sveltekit-reset="false"
+				>{NAMES[locale]}{#if locale === language}<span class="chosen" aria-hidden="true"
+					></span>{/if}</a
+			>
+		{/each}
+	</nav>
 	<header bind:this={header}>
 		<!-- no whitespace between spans, the messages hold their own spaces since chinese has none -->
 		<h1>
@@ -177,20 +192,6 @@
 	</section>
 
 	<footer class="foot">
-		<!-- client navigation keeps the scene running and the scroll position -->
-		<nav class="languages" aria-label={m.languages()}>
-			{#each locales as locale (locale)}
-				<a
-					href={resolve(localizeHref('/', { locale }) as Path)}
-					hreflang={TAGS[locale]}
-					lang={TAGS[locale]}
-					aria-current={locale === language ? 'page' : undefined}
-					data-sveltekit-noscroll
-					>{NAMES[locale]}{#if locale === language}<span class="chosen" aria-hidden="true"
-						></span>{/if}</a
-				>
-			{/each}
-		</nav>
 		<!-- icon only so switching language does not shift the links beside it -->
 		<a
 			class="github"
@@ -327,14 +328,15 @@
 		--bottom: max(1.5rem, env(safe-area-inset-bottom));
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
-		grid-template-rows: auto minmax(0, 1fr) auto;
+		grid-template-rows: auto auto minmax(0, 1fr) auto;
 		grid-template-areas:
+			'. languages'
 			'header header'
 			'scene request'
 			'. github';
 		column-gap: 3rem;
 		height: 100dvh;
-		padding: 2.5rem var(--right) var(--bottom) var(--left);
+		padding: 1.5rem var(--right) var(--bottom) var(--left);
 		box-sizing: border-box;
 		overflow: hidden;
 	}
@@ -547,34 +549,37 @@
 	.foot {
 		grid-area: github;
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		justify-content: flex-end;
-		gap: 0.5rem 1.75rem;
 		padding-top: 1rem;
-		/* In the serif of the line under the title, which it answers */
+	}
+
+	/* In the serif of the line under the title, which it answers */
+	.languages {
+		grid-area: languages;
+		display: flex;
+		justify-content: flex-end;
+		gap: 1rem;
+		margin-bottom: 1rem;
 		font-family: 'Newsreader Variable', Georgia, var(--serif-cjk), serif;
 		font-weight: 450;
 		font-size: 1.0625rem;
 	}
 
+	.languages a,
 	.foot a {
 		color: var(--ink-soft);
 		text-decoration: none;
 	}
 
 	/* Small, so it takes the full ink in the evening shade */
-	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) .foot a {
+	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) :is(.languages, .foot) a {
 		color: var(--ink);
 	}
 
+	.languages a:hover,
 	.foot a:hover {
 		color: var(--ink);
-	}
-
-	.languages {
-		display: flex;
-		gap: 1rem;
 	}
 
 	.languages a {
@@ -708,13 +713,13 @@
 		.page {
 			grid-template-columns: minmax(0, 1fr);
 			/* The link sits at the foot of the screen, however short the page */
-			grid-template-rows: auto auto auto 1fr;
-			grid-template-areas: 'header' 'scene' 'request' 'github';
+			grid-template-rows: auto auto auto auto 1fr;
+			grid-template-areas: 'languages' 'header' 'scene' 'request' 'github';
 			height: auto;
 			min-height: 100dvh;
 			overflow: visible;
 			--gutter: 1.5rem;
-			padding-top: 2.75rem;
+			padding-top: 1.25rem;
 		}
 
 		.scene {
@@ -730,12 +735,19 @@
 		/* Wider than a phone, the words keep to a column in the middle as wide as the title,
 		   so the request isn't left against one side with the screen empty beside it; the
 		   bridge still runs edge to edge */
+		.languages,
 		header,
 		.request,
 		.foot {
 			justify-self: center;
 			width: 100%;
 			max-width: 32rem;
+		}
+
+		/* Hung from the same edge as everything below it */
+		.languages {
+			justify-content: flex-start;
+			margin-bottom: 1.25rem;
 		}
 
 		/* Hung from the same edge as everything above it */
@@ -748,15 +760,16 @@
 
 	/* A phone on its side is as short as a letterbox, so rather than squeeze into it, the page
 	   scrolls: the request takes a column as tall as its docs, and the title sits over the
-	   bridge in the other. The bridge fills the rest of the first screen and no more, about
-	   7rem under the title, however long the docs make the page: stretched to their height, it
-	   would draw a sea as tall as the page. The languages and the link to the code wait under
-	   the docs, where they do on a wider screen */
+	   bridge in the other, under the languages. The bridge fills the rest of the first screen
+	   and no more, about 9rem under the languages and the title, however long the docs make
+	   the page: stretched to their height, it would draw a sea as tall as the page. The link
+	   to the code waits under the docs, where it does on a wider screen */
 	@media (orientation: landscape) and (max-height: 500px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr) 21rem;
-			grid-template-rows: auto max(60svh, 100svh - 7rem) 1fr auto;
+			grid-template-rows: auto auto max(60svh, 100svh - 9rem) 1fr auto;
 			grid-template-areas:
+				'languages request'
 				'header request'
 				'scene request'
 				'. request'
@@ -776,11 +789,16 @@
 			container-type: inline-size;
 		}
 
-		/* It sits on the same baseline as the request beside it: in Newsreader the baseline
-		   is 0.78em down its line, and in the request's IBM Plex Mono, at the size set in
-		   src/lib/Request.svelte, 0.975em down */
+		/* The languages sit on the same baseline as the request beside them: in Newsreader,
+		   set solid, the baseline is 0.78em down its line, and in the request's IBM Plex Mono,
+		   at the size set in src/lib/Request.svelte, 0.975em down */
+		.languages {
+			justify-content: flex-start;
+			margin: calc(0.975 * clamp(1.5rem, 2.3vw, 2rem) - 0.78em) 0 0.75rem;
+			line-height: 1.08;
+		}
+
 		h1 {
-			margin-top: calc(0.975 * clamp(1.5rem, 2.3vw, 2rem) - 0.78em);
 			font-size: clamp(1.75rem, min(10svh, 100cqi / 11.6), 2.75rem);
 		}
 
