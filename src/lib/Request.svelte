@@ -234,39 +234,11 @@
 		<div class="command">
 			{@render command()}
 			<!-- Copy sits with the path it copies; the icon swaps to a tick in place -->
-			<button class="copy" onclick={copy} aria-label={m.copy_url()} title={m.copy_full_url()}>
-				{@render icons()}
+			<button class="copy" onclick={copy}>
+				<span class="icons">{@render icons()}</span>
+				{copied ? m.copied() : m.copy()}
 			</button>
 			<span class="visually-hidden" role="status">{copied ? m.copied() : ''}</span>
-		</div>
-
-		<!-- The request, mirrored in the sea below it and broken up by ripples -->
-		<div class="reflection" aria-hidden="true">
-			<div class="mirror command">
-				{@render command()}
-				<!-- The icon is part of the line, so the sea shows it too -->
-				<span class="copy">{@render icons()}</span>
-			</div>
-			<svg width="0" height="0">
-				<filter id="ripple">
-					<feTurbulence type="fractalNoise" baseFrequency="0.008 0.32" numOctaves="2" seed="3">
-						{#if !reducedMotion}
-							<animate
-								attributeName="baseFrequency"
-								dur="7s"
-								values="0.008 0.32; 0.011 0.4; 0.008 0.32"
-								repeatCount="indefinite"
-							/>
-						{/if}
-					</feTurbulence>
-					<feDisplacementMap
-						in="SourceGraphic"
-						scale="16"
-						xChannelSelector="R"
-						yChannelSelector="G"
-					/>
-				</filter>
-			</svg>
 		</div>
 	</div>
 
@@ -274,19 +246,15 @@
 	     Both labels share its place, as wide as the longer, and swap there, so nothing on the row
 	     moves when they do or when the status lands beside them -->
 	<div class="bar">
-		<button
-			class="send"
-			onclick={view === 'docs' ? send : readDocs}
-			disabled={stage === 'sending'}
-			aria-label={view === 'docs' ? m.try_it_out() : m.read_docs()}
-		>
-			<span class={['label', { gone: view !== 'docs' }]} aria-hidden="true">
-				<span class="keycap">↵</span>
+		<button class="send" onclick={view === 'docs' ? send : readDocs} disabled={stage === 'sending'}>
+			<!-- Both are there, to size the key by; only the one shown is read out -->
+			<span class={['label', { gone: view !== 'docs' }]} aria-hidden={view !== 'docs'}>
+				<span class="keycap" aria-hidden="true">↵</span>
 				{m.try_it_out()}
 			</span>
-			<span class={['label', { gone: view === 'docs' }]} aria-hidden="true">
+			<span class={['label', { gone: view === 'docs' }]} aria-hidden={view === 'docs'}>
 				<!-- An open book, drawn in the same hairline as the copy icon -->
-				<span class="keycap">
+				<span class="keycap" aria-hidden="true">
 					<svg class="book" viewBox="0 0 16 16">
 						<path
 							d="M8 4.25C6.5 3.1 4.5 2.8 2.5 3v9.25c2-.2 4 .1 5.5 1.25 1.5-1.15 3.5-1.45 5.5-1.25V3c-2-.2-4 .1-5.5 1.25Z"
@@ -328,8 +296,8 @@
 			</div>
 		{/each}
 		<div class="scroll">
-			<!-- With the docs, the headers the response comes with, a little fainter -->
-			<div class={['headers', { ghost: !shownStatus }]}>
+			<!-- With the docs, the headers the response comes with -->
+			<div class="headers">
 				{@render headerList(shownStatus ? shownHeaders : exampleHeaders)}
 			</div>
 			<pre>{@render json(tokens)}</pre>
@@ -350,38 +318,17 @@
 		font-family: 'IBM Plex Mono', ui-monospace, monospace;
 	}
 
-	/* The request, set in type on the sky, with room underneath for its reflection */
 	.line {
 		position: relative;
-		margin-bottom: 1.75rem;
 	}
 
+	/* Copy sits on the path's baseline, whatever size either is set at */
 	.command {
 		display: flex;
-		align-items: flex-start;
+		align-items: baseline;
 		gap: 0.625rem;
 		font-size: clamp(1.5rem, 2.3vw, 2rem);
 		line-height: 1.2;
-	}
-
-	/* Upside down, fading with depth, and rippled */
-	.reflection {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		pointer-events: none;
-		mask-image: linear-gradient(rgb(0 0 0 / 0.45), transparent 90%);
-	}
-
-	.reflection .mirror {
-		transform: translateY(85%) scaleY(-0.85);
-		transform-origin: top;
-		filter: url(#ripple) blur(0.4px);
-	}
-
-	.reflection svg {
-		position: absolute;
 	}
 
 	code {
@@ -416,29 +363,27 @@
 		outline-offset: 3px;
 	}
 
-	/* A quiet glyph after the path, brightening on hover */
+	/* A quiet word after the path, with its glyph */
 	.copy {
-		display: inline-grid;
-		place-items: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		/* Centred on the capitals by hand, from IBM Plex Mono's metrics: an ascent of 1.02em
-		   and a descent of 0.27em in a 1.2em line put the baseline 0.975em down, and its
-		   capitals, 0.698em tall, are centred 0.626em down */
-		margin-top: calc(0.626em - 0.875rem);
-		border-radius: 0.375rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-height: 1.75rem;
+		padding: 0 0.5rem;
+		font-size: 0.875rem;
+		line-height: 1.2;
+		border-radius: var(--radius);
 		background: none;
 		color: var(--ink-soft);
-	}
-
-	/* The reflection is only an image of it, so it's pressed along with the button above it */
-	.line:has(button.copy:active) .mirror .copy {
-		transform: scale(0.97);
 	}
 
 	.copy:hover {
 		color: var(--ink);
 		background: color-mix(in srgb, var(--ink) 10%, transparent);
+	}
+
+	.icons {
+		display: inline-grid;
 	}
 
 	/* The icons swap with a short crossfade and the slightest blur, no movement */
@@ -472,6 +417,7 @@
 
 	.send {
 		display: inline-grid;
+		border-radius: var(--radius);
 		background: none;
 		color: var(--accent);
 		font-size: 0.8125rem;
@@ -514,7 +460,7 @@
 		height: 1.5rem;
 		border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
 		border-bottom-width: 2px;
-		border-radius: 0.3125rem;
+		border-radius: var(--radius);
 		color: var(--ink);
 		font-size: 1rem;
 		font-weight: 400;
@@ -598,7 +544,7 @@
 	   response, sized to contain nothing, fills it. The fade falls in the room left under the
 	   last line, which shows in full once it's scrolled to. A phone on its side, too short to
 	   hold the docs, does the same, and the page scrolls to them */
-	@media (max-width: 900px), (orientation: landscape) and (max-height: 500px) {
+	@media (max-width: 56.25em), (orientation: landscape) and (max-height: 31.25em) {
 		.terminal {
 			grid-template-rows: auto;
 			mask-image: linear-gradient(#000 calc(100% - 1.5rem), transparent);
@@ -649,11 +595,6 @@
 		overflow-wrap: anywhere;
 	}
 
-	/* An example until it's sent: a little fainter than the real thing, still easy to read */
-	.ghost {
-		opacity: 0.9;
-	}
-
 	.headers,
 	pre {
 		transition: opacity 0.3s ease-out;
@@ -672,7 +613,7 @@
 	}
 
 	.comment {
-		color: color-mix(in srgb, var(--ink-soft) 75%, transparent);
+		color: var(--ink-faint);
 	}
 
 	.string {

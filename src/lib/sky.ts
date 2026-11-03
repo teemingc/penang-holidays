@@ -8,7 +8,7 @@ const LONGITUDE = 100.33;
 const radians = (degrees: number) => (degrees * Math.PI) / 180;
 
 /** The date in Penang at a given moment, e.g. `2026-02-17` */
-const penangDate = (date: Date) =>
+export const penangDate = (date: Date) =>
 	date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' });
 
 /**
@@ -40,7 +40,11 @@ export interface Sun {
 export function sunAt(date: Date): Sun {
 	const day = (date.getTime() - Date.UTC(date.getUTCFullYear(), 0, 0)) / 86_400_000;
 	const declination = radians(-23.44) * Math.cos(((Math.PI * 2) / 365) * (day + 10));
-	const hours = date.getUTCHours() + date.getUTCMinutes() / 60 + LONGITUDE / 15;
+	// The sun keeps its own time, up to a quarter of an hour ahead of the clock's or behind it
+	// through the year: the equation of time, in minutes
+	const b = ((Math.PI * 2) / 365) * (day - 81);
+	const equation = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+	const hours = date.getUTCHours() + date.getUTCMinutes() / 60 + LONGITUDE / 15 + equation / 60;
 	const hourAngle = radians((hours - 12) * 15);
 	const latitude = radians(LATITUDE);
 	const elevation = Math.asin(
@@ -57,11 +61,13 @@ export function sunAt(date: Date): Sun {
 
 export type Phase = 'night' | 'dawn' | 'day' | 'dusk';
 
-/** Twilight runs from the sun 6° below the horizon to 6° above it */
+/**
+ * Twilight runs from the sun 6° below the horizon to 10° above it, when the sky starts to
+ * darken enough for the type to turn light
+ */
 export function phaseOf(sun: Sun): Phase {
-	const twilight = radians(6);
-	if (sun.elevation < -twilight) return 'night';
-	if (sun.elevation < twilight) return sun.azimuth < Math.PI ? 'dawn' : 'dusk';
+	if (sun.elevation < radians(-6)) return 'night';
+	if (sun.elevation < radians(10)) return sun.azimuth < Math.PI ? 'dawn' : 'dusk';
 	return 'day';
 }
 
@@ -136,8 +142,8 @@ export function paletteAt(sun: Sun): Palette {
 			? [PALETTES.night, PALETTES.night, 0]
 			: e < 0
 				? [PALETTES.night, twilight, (e - radians(-8)) / radians(8)]
-				: e < radians(10)
-					? [twilight, PALETTES.day, e / radians(10)]
+				: e < radians(14)
+					? [twilight, PALETTES.day, e / radians(14)]
 					: [PALETTES.day, PALETTES.day, 0];
 	return {
 		top: mix(from.top, to.top, t),
@@ -154,9 +160,75 @@ export function paletteAt(sun: Sun): Palette {
 // so the page sky is shaded, the scene keeps its own colours
 const EVENING: Rgb = [26, 20, 56];
 
-/** the page sky for this phase, shaded at dawn and dusk */
-export function shade(colour: Rgb, phase: Phase): Rgb {
-	return phase === 'dawn' || phase === 'dusk' ? mix(colour, EVENING, 0.68) : colour;
+const smoothstep = (from: number, to: number, x: number) => {
+	const t = Math.min(1, Math.max(0, (x - from) / (to - from)));
+	return t * t * (3 - 2 * t);
+};
+
+/**
+ * The page sky for where the sun is, shaded around twilight: more and more as the sun nears
+ * it, and gone by the time the type turns dark for the day, at 10°, so the sky never jumps
+ */
+export function shade(colour: Rgb, sun: Sun): Rgb {
+	const e = sun.elevation;
+	const twilight =
+		smoothstep(radians(-10), radians(-6), e) * (1 - smoothstep(radians(6), radians(10), e));
+	return mix(colour, EVENING, 0.68 * twilight);
+}
+
+// How bright a colour looks, and how far apart two are, as WCAG measures them
+const luminance = (colour: Rgb) => {
+	const [r, g, b] = colour.map((c) => {
+		const v = c / 255;
+		return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+};
+const contrast = (a: Rgb, b: Rgb) => {
+	const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+	return (x! + 0.05) / (y! + 0.05);
+};
+
+/** How far apart the type and the sky behind it have to be, at the least: WCAG's AA */
+const LEGIBLE = 4.5;
+
+export interface Inks {
+	/** Whether the type is dark, on a light sky */
+	dark: boolean;
+	ink: Rgb;
+	/** Quieter type: dates, notes, the request's body */
+	soft: Rgb;
+	/** Quieter still: the comments in the request's body */
+	faint: Rgb;
+	accent: Rgb;
+}
+
+/**
+ * The type for a sky whose top is `top`: light or dark, whichever stands out more against it,
+ * and its quieter shades as quiet as they're meant to be, but never too faint to read. Through
+ * twilight, when the sky is neither light nor dark, they're all as strong as the ink itself
+ */
+export function inksFor(top: Rgb): Inks {
+	const light: Rgb = [244, 248, 251];
+	const darkInk: Rgb = [6, 20, 42];
+	const dark = contrast(darkInk, top) > contrast(light, top);
+	// When the sky is halfway between, only pure black or white stands out enough
+	let ink = dark ? darkInk : light;
+	const purest: Rgb = dark ? [0, 0, 0] : [255, 255, 255];
+	for (let i = 0; i < 10 && contrast(ink, top) < LEGIBLE; i++) ink = mix(ink, purest, 0.25);
+	// `colour` blended into the sky by `strength`, strengthened until it can be read
+	const legible = (colour: Rgb, strength: number) => {
+		for (let s = strength; s < 1; s += 0.02) {
+			const blended = mix(top, colour, s);
+			if (contrast(blended, top) >= LEGIBLE) return blended;
+		}
+		return colour;
+	};
+	// The accent, deepened towards the ink until it can be read
+	let accent: Rgb = dark ? [6, 63, 115] : [246, 207, 79];
+	for (let i = 0; i < 30 && contrast(accent, top) < LEGIBLE; i++) accent = mix(accent, ink, 0.1);
+	if (contrast(accent, top) < LEGIBLE) accent = ink;
+	return { dark, ink, soft: legible(ink, 0.74), faint: legible(ink, 0.54), accent };
 }
 
 export interface Moon extends Sun {

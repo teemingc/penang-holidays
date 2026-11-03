@@ -20,7 +20,7 @@
 <style>
 	:global(body) {
 		margin: 0;
-		font-size: 16px;
+		font-size: 100%;
 		line-height: 1.6;
 		-webkit-font-smoothing: antialiased;
 	}

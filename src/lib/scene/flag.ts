@@ -14,6 +14,9 @@ export function createFlag(flag: HTMLElement, reduced: () => boolean) {
 	let gust = 0;
 	let gustWay = 1;
 	let flapping = 0;
+	// How far it leans, and which way: eased, so a car dragged back and forth by it sways it
+	// rather than flipping it from side to side
+	let lean = 0;
 	let rate = 1;
 	let animations: Animation[] = [];
 
@@ -56,7 +59,7 @@ export function createFlag(flag: HTMLElement, reduced: () => boolean) {
 		},
 
 		flutter(dt: number) {
-			if (gust === 0 && flapping === 0) return;
+			if (gust === 0 && flapping === 0 && lean === 0) return;
 			// It catches the gust at once, and the gust dies away over a couple of seconds
 			gust = gust < 0.005 ? 0 : gust * Math.exp(-dt * 1.6);
 			flapping += (gust - flapping) * Math.min(1, dt * (gust > flapping ? 14 : 4));
@@ -67,14 +70,18 @@ export function createFlag(flag: HTMLElement, reduced: () => boolean) {
 				if (!animations.length) animations = flag.getAnimations({ subtree: true });
 				for (const animation of animations) animation.updatePlaybackRate(rate);
 			}
-			flag.style.transform = flapping
-				? `rotate(${gustWay * flapping * 7}deg) scaleX(${1 - flapping * (gustWay < 0 ? 0.3 : 0.08)})`
+			lean += (gustWay * flapping - lean) * Math.min(1, dt * 6);
+			if (flapping === 0 && Math.abs(lean) < 0.005) lean = 0;
+			// Blown back towards the hoist it bunches up more than blown out away from it
+			const bunch = lean < 0 ? 0.3 : 0.08;
+			flag.style.transform = lean
+				? `rotate(${lean * 7}deg) scaleX(${1 - Math.abs(lean) * bunch})`
 				: '';
 		},
 
 		dispose() {
 			flag.removeEventListener('pointerdown', flick);
-			gust = flapping = 0;
+			gust = flapping = lean = 0;
 			flag.style.transform = '';
 			for (const animation of animations) animation.updatePlaybackRate(1);
 		}

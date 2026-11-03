@@ -5,7 +5,6 @@
 	import fonts from '#lib/fonts.css?url';
 	// The Latin files every page uses, fetched alongside the stylesheets instead of after them
 	import newsreader from '@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2?url';
-	import schibsted from '@fontsource-variable/schibsted-grotesk/files/schibsted-grotesk-latin-wght-normal.woff2?url';
 	import plex400 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url';
 	import plex600 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2?url';
 	import { onMount } from 'svelte';
@@ -26,7 +25,16 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, locales, localizeHref } from '#lib/paraglide/runtime.js';
 	import { SOURCE_URL } from '#lib/source.js';
-	import { currentYear, now, paletteAt, phaseOf, shade, sunAt } from '#lib/sky.js';
+	import {
+		currentYear,
+		inksFor,
+		now,
+		paletteAt,
+		penangDate,
+		phaseOf,
+		shade,
+		sunAt
+	} from '#lib/sky.js';
 
 	const language = $derived(getLocale());
 
@@ -37,27 +45,90 @@
 	// Where the API lives
 	const ORIGIN = 'https://penang-holidays.teemingc.workers.dev';
 
-	// each language in its own name for the switcher
-	const NAMES = { en: 'English', ms: 'Melayu' };
-
-	// How many strips the little flag in the headline is cut into, to wave
+	// How many strips the little flag in the title is cut into, to wave
 	const STRIPS = 24;
 
-	// The year to request: the one the page was built in, then the one it's opened in
+	// each language named in the page's own, for the switcher in the title
+	const LANGUAGE_NAMES = { en: m.language_en, ms: m.language_ms };
+
+	// The year shown and requested: the one the page was built in, then the one it's opened in,
+	// then whichever is picked
 	let opened = $state<number>();
-	onMount(() => (opened = currentYear(now(), data.years)));
-	const year = $derived(opened ?? data.year);
+	let picked = $state<number>();
+	// Today in Penang, once the page is open, to leave out what's passed and mark what's next
+	let today = $state<string>();
+	onMount(() => {
+		opened = currentYear(now(), data.years);
+		today = penangDate(now());
+	});
+	const year = $derived(picked ?? opened ?? data.year);
+	// This year and any after it, to pick from: a year that's begun since the page was built
+	// leaves the last behind
+	const years = $derived(data.years.filter((y) => y >= (opened ?? data.year)));
 
 	// english is the default so it needs no ?lang=
 	const path = $derived(
 		resolve('/[year]', { year: String(year) }) + (language === 'en' ? '' : `?lang=${language}`)
 	);
 
+	// The year's holidays by month, the next one marked. The ones gone by are hidden until
+	// asked for, from the first paint, by a style src/app.html writes for the day it is, so the
+	// list never shrinks once the page knows the day itself
+	const all = $derived(data.holidays[year] ?? []);
+	let showEarlier = $state(false);
+	const monthName = $derived(
+		new Intl.DateTimeFormat(TAGS[language], { month: 'long', timeZone: 'UTC' })
+	);
+	const months = $derived.by(() => {
+		const holidays = all;
+		const next = today ? holidays.find((h) => h.date >= today!)?.date : undefined;
+		const tag = TAGS[language];
+		const weekday = new Intl.DateTimeFormat(tag, { weekday: 'long', timeZone: 'UTC' });
+		const relative = new Intl.RelativeTimeFormat(tag, { numeric: 'auto' });
+		const rows = holidays.map((h) => {
+			const date = new Date(`${h.date}T00:00:00Z`);
+			const days = today ? Math.round((+date - +new Date(`${today}T00:00:00Z`)) / 864e5) : 0;
+			return {
+				...h,
+				day: date.getUTCDate(),
+				weekday: weekday.format(date),
+				passed: today ? h.date < today : false,
+				next: h.date === next,
+				until: relative.format(days, 'day')
+			};
+		});
+		return [...Map.groupBy(rows, (row) => row.date.slice(0, 7))].map(([key, holidays]) => ({
+			key,
+			name: monthName.format(new Date(`${key}-01T00:00:00Z`)),
+			holidays
+		}));
+	});
+
+	const tentative = $derived(all.some((h) => h.tentative));
+
+	// The ones gone by, folded into one place in the table: a tally for each of them, of it and
+	// all before it, of which src/app.html shows the one that ends at the last gone by
+	const tallies = $derived.by(() => {
+		const first = all[0] && monthName.format(new Date(`${all[0].date}T00:00:00Z`));
+		return all.map((h, i) => {
+			const last = monthName.format(new Date(`${h.date}T00:00:00Z`));
+			return {
+				date: h.date,
+				next: all[i + 1]?.date,
+				range: first === last ? last : `${first}–${last}`,
+				count: i === 0 ? m.holiday_one() : m.holidays_count({ count: i + 1 })
+			};
+		});
+	});
+
 	// Whether the scene has drawn its first frame, to take the place of its snapshot
 	let ready = $state(false);
 
-	// Where cars fly through the words, handed to the scene
-	let header = $state<HTMLElement>();
+	// The title, which cars flung off the bridge fly through as cloud, handed to the scene
+	let masthead = $state<HTMLElement>();
+	// The sky the bridge is in, which its canvas reaches up to the top of
+	let pane = $state<HTMLElement>();
+	let almanac = $state<HTMLElement>();
 
 	$effect(() => {
 		document.documentElement.lang = TAGS[language];
@@ -68,34 +139,44 @@
 	// A switch of language animates the elements themselves, not a view transition: Safari
 	// lays its snapshots out a little off when the page is scrolled or its bars move, so the
 	// real words jerked into place as they took over at the end. The new words fade in where
-	// they are, and the underline glides from the old language to the new
-	let underlineFrom: DOMRect | undefined;
+	// they are, through a slight blur, and the underline glides from the old language to the new
+	let switchedFrom: typeof language | undefined;
 	onNavigate(({ from, to }) => {
 		// each language is its own path, / or /ms
 		if (from?.url.pathname === to?.url.pathname) return;
-		underlineFrom = languages?.querySelector('.chosen')?.getBoundingClientRect();
+		switchedFrom = language;
 	});
 	afterNavigate(() => {
-		const from = underlineFrom;
-		underlineFrom = undefined;
-		if (!from || !header) return;
-		const words = [...header.querySelectorAll('h1, p')];
+		const old = switchedFrom;
+		switchedFrom = undefined;
+		if (!old) return;
+		const words = [
+			// The title's words, not the title: a filter on it would gather them, lifted in front
+			// of the sky's canvas, back behind it until it ends, and flatten the flag
+			...(masthead?.querySelectorAll('h1 .words') ?? []),
+			...(almanac?.querySelectorAll('h2, h3, .name, .when, .note') ?? []),
+			...document.querySelectorAll('.request .copy, .request .send, .foot > *')
+		];
+		// The language line holds the underline, which has to stay in sight as it glides, so its
+		// words fade by their colour alone
+		const line = languages?.querySelectorAll('.languages > span, .languages a') ?? [];
+		const fade = {
+			duration: reducedMotion.current ? 200 : 240,
+			easing: 'cubic-bezier(0.19, 1, 0.22, 1)'
+		};
+		for (const el of line) el.animate([{ color: 'transparent' }, {}], fade);
 		if (reducedMotion.current) {
-			for (const el of words) el.animate({ opacity: [0, 1] }, { duration: 200, easing: 'ease' });
+			for (const el of words) el.animate({ opacity: [0, 1] }, fade);
 			return;
 		}
 		for (const el of words) {
-			el.animate(
-				{
-					opacity: [0, 1],
-					filter: ['blur(2px)', 'blur(0)'],
-					transform: ['translateY(4px)', 'none']
-				},
-				{ duration: 240, easing: 'cubic-bezier(0.19, 1, 0.22, 1)' }
-			);
+			el.animate({ opacity: [0, 1], filter: ['blur(2px)', 'blur(0)'] }, fade);
 		}
+		// From the old language's name, where the new sentence has put it
 		const underline = languages?.querySelector('.chosen');
-		if (!underline) return;
+		const before = languages?.querySelector(`a[hreflang="${TAGS[old]}"]`);
+		if (!underline || !before) return;
+		const from = before.getBoundingClientRect();
 		const to = underline.getBoundingClientRect();
 		underline.animate(
 			{
@@ -107,9 +188,9 @@
 
 	const rgb = ([r, g, b]: number[]) => `rgb(${Math.round(r!)} ${Math.round(g!)} ${Math.round(b!)})`;
 
-	// The page's colours follow the time of day in Penang: set before the first paint by
-	// src/app.html, and kept up to date here. The type changes colour with the phase of the
-	// day, while the sky behind it blends across twilight, just as the scene's does
+	// The sky follows the time of day in Penang: set before the first paint by src/app.html,
+	// and kept up to date here, blended across twilight just as the scene's is. The sea around
+	// it deepens with the sky, one solid colour at every edge, and the browser's bars with it
 	onMount(() => {
 		const update = () => {
 			const sun = sunAt(now());
@@ -117,11 +198,17 @@
 			const phase = phaseOf(sun);
 			root.dataset.sky = phase;
 			const { top, horizon } = paletteAt(sun);
-			root.style.setProperty('--top', rgb(shade(top, phase)));
-			root.style.setProperty('--horizon', rgb(shade(horizon, phase)));
-			document
-				.querySelector('meta[name="theme-color"]')
-				?.setAttribute('content', rgb(shade(top, phase)));
+			const sky = shade(top, sun);
+			root.style.setProperty('--top', rgb(sky));
+			root.style.setProperty('--horizon', rgb(shade(horizon, sun)));
+			document.querySelector('meta[name="theme-color"]')?.setAttribute('content', rgb(sky));
+			// The type, light or dark, legible against the sky; keep in sync with src/app.html
+			const inks = inksFor(sky);
+			root.dataset.ink = inks.dark ? 'dark' : 'light';
+			root.style.setProperty('--ink', rgb(inks.ink));
+			root.style.setProperty('--ink-soft', rgb(inks.soft));
+			root.style.setProperty('--ink-faint', rgb(inks.faint));
+			root.style.setProperty('--accent', rgb(inks.accent));
 		};
 		update();
 		const timer = setInterval(update, 60_000);
@@ -131,7 +218,7 @@
 
 <svelte:head>
 	<title>{m.title()}</title>
-	{#each [newsreader, schibsted, plex400, plex600] as font (font)}
+	{#each [newsreader, plex400, plex600] as font (font)}
 		<link rel="preload" href={font} as="font" type="font/woff2" crossorigin="anonymous" />
 	{/each}
 	<link rel="stylesheet" href={fonts} />
@@ -158,28 +245,20 @@
 </svelte:head>
 
 <div class="page">
-	<!-- first, so it is to hand as the page opens. client navigation without a reset keeps
-     the scene running, the scroll position and focus -->
-	<nav class="languages" aria-label={m.languages()} bind:this={languages}>
-		{#each locales as locale (locale)}
-			<a
-				href={resolve(localizeHref('/', { locale }) as Path)}
-				hreflang={TAGS[locale]}
-				lang={TAGS[locale]}
-				aria-current={locale === language ? 'page' : undefined}
-				data-sveltekit-reset="false"
-				>{NAMES[locale]}{#if locale === language}<span class="chosen" aria-hidden="true"
-					></span>{/if}</a
-			>
-		{/each}
-	</nav>
-	<header bind:this={header}>
+	<!-- Where the sky over Penang is, behind the title and the bridge: the scene draws it -->
+	<div class="sky" aria-hidden="true" bind:this={pane}></div>
+
+	<header class="masthead" bind:this={masthead}>
+		<!-- Under the title, the languages the holidays are named in are the switcher itself: each name links to
+		     the page in that language. Client navigation without a reset keeps the scene
+		     running, the scroll position and focus. No whitespace between the parts, the
+		     messages hold their own spaces since chinese has none -->
 		<!-- no whitespace between spans, the messages hold their own spaces since chinese has none -->
 		<h1>
 			<span class="words">{m.heading_lead()}</span><span class="last"
 				><span class="words">{m.heading_last()}</span>
 				<!-- A little Penang flag, waving: vertical strips of it swing in perspective one after
-			     another, so a ripple runs from the hoist to the fly -->
+				     another, so a ripple runs from the hoist to the fly -->
 				<span class="flag" aria-hidden="true" style:--flag={`url("${flag}")`}>
 					{#each { length: STRIPS }, i (i)}
 						<span class="strip" style:--i={i}></span>
@@ -187,15 +266,33 @@
 				</span></span
 			>
 		</h1>
-		<p>
-			{m.sourced_from()}<a href={SOURCE_URL} rel="external">penang.gov.my</a>{m.sourced_end()}
+		<p class="languages" bind:this={languages}>
+			<span>{m.languages_in()}</span>{#each locales as locale, i (locale)}{#if i > 0}<span
+						>{m.languages_and()}</span
+					>{/if}<a
+					href={resolve(localizeHref('/', { locale }) as Path)}
+					hreflang={TAGS[locale]}
+					aria-current={locale === language ? 'page' : undefined}
+					data-sveltekit-reset="false"
+					>{LANGUAGE_NAMES[locale]()}{#if locale === language}<span
+							class="chosen"
+							aria-hidden="true"
+						></span>{/if}</a
+				>{/each}
 		</p>
 	</header>
 
-	<div class="scene">
+	<!-- The bridge, with the sun, moon and stars in the sky above it. Cars flung off it fly up
+	     through the title and the flag -->
+	<div class="plate">
 		<!-- three.js is most of the page's weight, so the scene loads after everything else -->
 		{#await import('#lib/Scene.svelte') then { default: Scene }}
-			<Scene reducedMotion={reducedMotion.current} {header} onready={() => (ready = true)} />
+			<Scene
+				reducedMotion={reducedMotion.current}
+				header={masthead}
+				{pane}
+				onready={() => (ready = true)}
+			/>
 		{/await}
 		<!-- A still of the scene at each time of day, shown until three.js has loaded and drawn it -->
 		<div
@@ -208,7 +305,64 @@
 		></div>
 	</div>
 
-	<section class="request" aria-label={m.try_api()}>
+	<section class="almanac" aria-labelledby="almanac-heading" bind:this={almanac}>
+		<!-- The heading's sentence is finished by the year, or with next year's holidays out, by
+		     the year picked, which shows its holidays and is the year the request asks for -->
+		<div class="years">
+			{#if years.length > 1}
+				<h2 id="almanac-heading">{m.holidays_in()}</h2>
+				{#each years as y (y)}
+					<button aria-pressed={y === year} onclick={() => (picked = y)}>{y}</button>
+				{/each}
+			{:else}
+				<h2 id="almanac-heading">{m.holidays_in()} <span class="year">{year}</span></h2>
+			{/if}
+		</div>
+
+		<div class={['months', { all: showEarlier }]}>
+			<!-- The holidays gone by, folded into the table's first place, but there to look back on -->
+			<div class="fold">
+				{#each tallies as tally (tally.date)}
+					<div class="tally" data-date={tally.date} data-next={tally.next}>
+						<h3>{tally.range}</h3>
+						<p>{tally.count}</p>
+					</div>
+				{/each}
+				<button
+					class="earlier"
+					aria-expanded={showEarlier}
+					onclick={() => (showEarlier = !showEarlier)}
+					>{showEarlier ? m.hide_earlier() : m.show_earlier()}</button
+				>
+			</div>
+			{#each months as month (month.key)}
+				<div class="month">
+					<h3>{month.name}</h3>
+					<ol>
+						{#each month.holidays as holiday, i (i)}
+							<li class={{ passed: holiday.passed, next: holiday.next }} data-date={holiday.date}>
+								<time datetime={holiday.date}>{holiday.day}</time>
+								<span class="name">{holiday.name}{holiday.tentative ? ' *' : ''}</span>
+								<span class="when"
+									>{holiday.weekday}{#if holiday.next}, {holiday.until}{/if}</span
+								>
+							</li>
+						{/each}
+					</ol>
+				</div>
+			{/each}
+		</div>
+
+		<!-- Shown by the same style, once every one of them is gone -->
+		<p class="note over">{m.holidays_over()}</p>
+
+		{#if tentative}
+			<p class="note">{m.tentative_note()}</p>
+		{/if}
+	</section>
+
+	<!-- The request speaks for itself, so it has no heading of its own -->
+	<section class="request">
 		<Request
 			{language}
 			{path}
@@ -219,176 +373,122 @@
 	</section>
 
 	<footer class="foot">
-		<!-- icon only so switching language does not shift the links beside it -->
-		<a
-			class="github"
-			href="https://github.com/teemingc/penang-holidays"
-			aria-label="Source on GitHub"
-			title="Source on GitHub"
-		>
+		<p>
+			{m.sourced_from()}<a href={SOURCE_URL} rel="external">penang.gov.my</a>{m.sourced_end()}
+		</p>
+		<a class="github" href="https://github.com/teemingc/penang-holidays">
 			<svg viewBox="0 0 16 16" aria-hidden="true"
 				><path
 					d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"
 				/></svg
-			>
+			>{m.source_on_github()}
 		</a>
 	</footer>
 </div>
 
 <style>
-	/* The sky over Penang right now: night, dawn, day or dusk. The sky's own colours here are
-	   only for a page without scripts, which is always night: otherwise --top and --horizon are
-	   blended from src/lib/sky.ts, as the scene's sky is, so the two meet without a seam */
+	/* The page is the top of the sky, one solid colour at every edge of the screen. A browser
+	   that fills its bars, or the sides of a folding phone, with the page's colour fills them
+	   with this, so they always match. It's set for the time of day by src/app.html and below;
+	   here, the night's, for a page without scripts. The flag's yellow marks only what's
+	   chosen or next */
 	:global(:root) {
+		/* The type, for a page without scripts: otherwise set for the sky by src/lib/sky.ts's
+		   inksFor, light or dark, and never too faint to read against it */
+		--ink: #f4f8fb;
+		--ink-soft: rgb(244 248 251 / 0.74);
+		--ink-faint: rgb(244 248 251 / 0.54);
+		--accent: #f6cf4f;
+		/* The sky's colours for a page without scripts, always night: otherwise blended from
+		   src/lib/sky.ts, as the scene's sky is, so the two meet without a seam */
 		--top: rgb(5 8 20);
 		--horizon: rgb(22 32 66);
-		--ink: #f3f4f7;
-		--ink-soft: rgb(243 244 247 / 0.7);
-		--accent: #6fd0ff;
-		/* chinese serif fallback, the page fonts have no chinese */
-		--serif-cjk: 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif SC', 'SimSun';
+		/* The corners of everything boxed: one for boxes and keys, round for the years */
+		--radius: 0.375rem;
+		--round: 999px;
+		--serif:
+			'Newsreader Variable', Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif SC', serif;
 		color-scheme: dark;
+		background: var(--top);
+		transition: background-color 4s ease;
 	}
 
-	:global(:root[data-sky='dawn']) {
-		--accent: #ffd2b8;
-		--ink-soft: rgb(243 244 247 / 0.8);
-	}
-
-	:global(:root[data-sky='day']) {
-		--ink: #0b1d36;
-		--ink-soft: rgb(11 29 54 / 0.85);
-		--accent: #063f73;
+	/* Dark type on a bright sky */
+	:global(:root[data-ink='dark']) {
 		color-scheme: light;
 	}
 
-	:global(:root[data-sky='dusk']) {
-		--accent: #ffc58f;
-		--ink-soft: rgb(243 244 247 / 0.8);
-	}
-
-	/* The solid colour is what a browser tints its bars with, and shows past the ends of the
-	   page. It's the root's, so the body's sky can go beneath the body */
-	:global(:root) {
-		background: var(--top);
-	}
-
 	:global(body) {
-		min-height: 100dvh;
-		background: none;
 		color: var(--ink);
-		font-family: 'Schibsted Grotesk Variable', system-ui, sans-serif;
-	}
-
-	/* The sky, fixed to the screen however far the page scrolls: Safari on iOS ignores a fixed
-	   background, and would stretch it down the whole page instead, so it's a layer of its own */
-	:global(body::before) {
-		content: '';
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 100lvh;
-		z-index: -1;
-		/* Under Safari's bar it isn't drawn, and the page's own colour shows instead, the
-		   horizon, so it's the horizon by the top of the bar */
-		background: linear-gradient(var(--top), var(--horizon) 100svh);
-	}
-
-	/* On a phone held upright, Safari shows the page's own colour under its bars, past the
-	   sky, and tints them with it, so it's the foot of the sky. Nothing is fixed along either
-	   edge: Safari paints anything there as a solid band over the page, instead of letting the
-	   page scroll beneath its bars. On its side, there's no bar at the foot, and the page's
-	   colour is the top of the sky */
-	@media (max-width: 900px) and (orientation: portrait) {
-		:global(:root) {
-			background: var(--horizon);
-		}
-	}
-
-	/* On its side, as Safari's bar slides away the screen grows, and the sky is moved to fill
-	   it a moment late, leaving the page's colour, the top of the sky, in a dark strip at the
-	   foot. With no bar at the foot to paint it as a band, the sky can reach past both edges
-	   of the screen, in its own colours, to cover whatever's uncovered */
-	@media (orientation: landscape) and (max-height: 500px) {
-		:global(body::before) {
-			top: -50lvh;
-			height: 200lvh;
-			background: linear-gradient(var(--top) 25%, var(--horizon) 75%);
-		}
-	}
-
-	/* A folding phone on its side, squarer than a phone's screen though as short, has
-	   Safari's bar down a side, filled solid with the page's own colour, and a glass bar at the
-	   foot, over the page. The page's colour is the horizon, as it is upright, so the bar and
-	   whatever shows past the foot of the page meet the foot of the sky. Safari cuts a fixed
-	   layer off at its bars, so the sky is part of the page there, drawn beneath the glass */
-	@media (orientation: landscape) and (pointer: coarse) and (max-aspect-ratio: 16/9) {
-		:global(:root) {
-			background: var(--horizon);
-		}
-
-		/* At least as tall as the screen with Safari's bar slid away, so the sky doesn't
-		   stretch as the bar comes and goes */
-		:global(body) {
-			position: relative;
-			min-height: 100lvh;
-		}
-
-		:global(body::before) {
-			position: absolute;
-			inset: 0;
-			height: auto;
-			background: linear-gradient(var(--top), var(--horizon));
-		}
+		/* Turning dark for the day as slowly as the sky turns light */
+		transition: color 4s ease;
+		font-family: var(--serif);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.page {
-		/* How far below the top of its area the request starts */
-		--drop: clamp(0.5rem, 9vh, 6rem);
-		/* The page reaches every edge of the screen (viewport-fit=cover in src/app.html), so
-		   the gutters widen to keep the words clear of a notch or the corners of a phone on its
-		   side; what bleeds to the edges, bleeds by as much */
-		--gutter: 2.5rem;
-		--left: max(var(--gutter), env(safe-area-inset-left));
-		--right: max(var(--gutter), env(safe-area-inset-right));
-		--bottom: max(1.5rem, env(safe-area-inset-bottom));
+		/* The ground around everything, widened past a notch or the corners of a phone on its
+		   side, which viewport-fit=cover in src/app.html lets the ground itself reach under */
+		--gutter: clamp(1.25rem, 4vw, 3.5rem);
+		/* Eased out to nothing: fully there in the middle, then thinning along a cosine, so
+		   there's no line where it starts to go and none where it's gone */
+		--ellipse: radial-gradient(
+			50% 50% at 50% 50%,
+			rgb(0 0 0 / 1) 28%,
+			rgb(0 0 0 / 0.976) 35.2%,
+			rgb(0 0 0 / 0.905) 42.4%,
+			rgb(0 0 0 / 0.794) 49.6%,
+			rgb(0 0 0 / 0.655) 56.8%,
+			rgb(0 0 0 / 0.5) 64%,
+			rgb(0 0 0 / 0.345) 71.2%,
+			rgb(0 0 0 / 0.206) 78.4%,
+			rgb(0 0 0 / 0.095) 85.6%,
+			rgb(0 0 0 / 0.024) 92.8%,
+			rgb(0 0 0 / 0) 100%
+		);
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
-		grid-template-rows: auto auto minmax(0, 1fr) auto;
 		grid-template-areas:
-			'. languages'
-			'header header'
-			'scene request'
-			'. github';
-		column-gap: 3rem;
-		height: 100dvh;
-		padding: 1.5rem var(--right) var(--bottom) var(--left);
-		box-sizing: border-box;
-		overflow: hidden;
+			'masthead masthead'
+			'plate plate'
+			'almanac request'
+			'foot foot';
+		column-gap: clamp(2rem, 5vw, 5rem);
+		max-width: 90rem;
+		margin: 0 auto;
+		padding: max(var(--gutter), env(safe-area-inset-top))
+			max(var(--gutter), env(safe-area-inset-right)) max(var(--gutter), env(safe-area-inset-bottom))
+			max(var(--gutter), env(safe-area-inset-left));
 	}
 
-	/* The header itself isn't lifted, so the bridge's canvas, which comes after it, is drawn
-	   over the flag: a car flung up there passes in front of it */
-	header {
-		grid-area: header;
+	/* Rounded, so its focus ring is too */
+	a {
+		border-radius: var(--radius);
+		color: inherit;
+		text-underline-offset: 0.18em;
+		text-decoration-thickness: 1px;
 	}
 
-	/* The words are in front of the sky: clouds, and anything flung up there, pass behind them */
-	.words,
-	header p {
-		position: relative;
-		z-index: 1;
+	a:hover {
+		text-decoration-thickness: 2px;
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--ink);
+		outline-offset: 3px;
+	}
+
+	.masthead {
+		grid-area: masthead;
 	}
 
 	h1 {
 		margin: 0;
-		font-family: 'Newsreader Variable', Georgia, var(--serif-cjk), serif;
+		font-size: clamp(2.75rem, 6vw, 5.75rem);
 		font-weight: 600;
-		font-size: clamp(2.75rem, 5vw, 5.25rem);
 		line-height: 1.08;
 		letter-spacing: -0.005em;
-		color: var(--ink);
+		text-wrap: balance;
 	}
 
 	/* The flag never wraps onto a line of its own */
@@ -407,7 +507,7 @@
 		margin: 0 0 0 0.22em;
 		perspective: 1.5em;
 		vertical-align: -0.02em;
-		/* A gust from a passing car leans it from the hoist; see Scene.svelte */
+		/* A flick leans it from the hoist; see src/lib/scene/flag.ts */
 		transform-origin: left center;
 		/* It can be flicked, too */
 		cursor: pointer;
@@ -439,6 +539,8 @@
 		inset: 0;
 		background: #000;
 		border-radius: inherit;
+		/* clear when it isn't folding, as with reduced motion, or it blacks out the flag */
+		opacity: 0;
 		animation: fold 2.4s ease-in-out infinite;
 		animation-delay: inherit;
 	}
@@ -484,52 +586,98 @@
 		}
 	}
 
-	header p {
-		margin: 1rem 0 0;
-		font-family: 'Newsreader Variable', Georgia, var(--serif-cjk), serif;
-		font-weight: 450;
+	/* In the same face as the title, a size down, so the two read as one statement */
+	.languages {
+		margin: clamp(0.5rem, 1.5vw, 1rem) 0 clamp(1.5rem, 3.5vw, 3rem);
 		font-size: clamp(1.375rem, 2.1vw, 1.875rem);
+		font-weight: 450;
 		line-height: 1.4;
-		letter-spacing: 0.005em;
+	}
+
+	/* The other language is a link, underlined like any; the one the page is in is set apart by
+	   its weight and a heavier line under it, not just its colour */
+	.languages a {
+		position: relative;
 		color: var(--ink-soft);
+		text-decoration-color: currentColor;
+		/* the old language's own underline fades in as the chosen one glides away from it */
+		transition:
+			color 0.2s ease,
+			text-decoration-color 0.25s ease;
 	}
 
-	a {
-		color: inherit;
-		text-underline-offset: 0.18em;
-		text-decoration-thickness: 1px;
+	.languages [aria-current='page'] {
+		font-weight: 600;
+		text-decoration-color: transparent;
 	}
 
-	a:hover {
-		text-decoration-thickness: 2px;
-	}
-
-	header a {
+	.languages a:hover,
+	.languages [aria-current='page'] {
 		color: var(--ink);
 	}
 
-	:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 3px;
+	/* a separate line so it can glide to the next chosen language */
+	.chosen {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0.02em;
+		height: 0.07em;
+		/* the ink itself, not the word's colour, which the smoke hides while it stands in for it */
+		background: var(--ink);
+		/* glides from the last language, see afterNavigate */
+		transform-origin: left;
 	}
 
-	.scene {
-		grid-area: scene;
-		min-height: 0;
-		margin: 0.5rem calc(-1 * var(--right)) 0 calc(-1 * var(--left));
+	/* Where the sky is: behind the title and the bridge. The scene draws it, from its top, which
+	   is the page's own colour, to its horizon, misting out into the page */
+	.sky {
+		grid-column: 1 / -1;
+		grid-row: 1 / span 2;
+	}
+
+	/* The words are in front of the bridge's canvas, which reaches up behind them: a car flung
+	   up passes behind them, as cloud. The title itself isn't lifted, so the canvas, which
+	   comes after it, is drawn over the flag: a car passes in front of that */
+	.words,
+	.languages {
 		position: relative;
+		z-index: 1;
+	}
+
+	/* The bridge and the strait, at the foot of the sky. The sea takes the accent for the time
+	   of day, which src/lib/Scene.svelte reads from here */
+	.plate {
+		--accent: #6fd0ff;
+		grid-area: plate;
+		position: relative;
+		height: clamp(16rem, 36vw, 34rem);
+		color: #f3f4f7;
 		/* Sized by the page, never by what's in it, so the still can follow its shape */
 		container-type: size;
 	}
 
+	:global(:root[data-sky='dawn']) .plate {
+		--accent: #ffd2b8;
+	}
+
+	:global(:root[data-sky='day']) .plate {
+		--accent: #063f73;
+		color: #0b1d36;
+	}
+
+	:global(:root[data-sky='dusk']) .plate {
+		--accent: #ffc58f;
+	}
+
 	/* Framed as the scene is: its camera's field of view is set by the height, so the still is
-	   fitted to the height and cropped at the sides, which are feathered just as the scene's are */
+	   fitted to the height and cropped at the sides, and eased out to nothing all round */
 	.still {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
 		background: var(--night) center / auto 100% no-repeat;
-		mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+		mask-image: var(--ellipse);
 		transition: opacity 0.6s ease-out;
 	}
 
@@ -563,190 +711,271 @@
 		}
 	}
 
-	/* Level with the bridge, and filling the rest of the column so the response has room
-	   without the page moving */
+	/* The year's holidays, set like a tide table: the day large, what it is beside it */
+	.almanac {
+		grid-area: almanac;
+		padding-top: clamp(2rem, 5vw, 4rem);
+		/* Its heading and the request beside it read along one line */
+		align-self: baseline;
+	}
+
+	/* What each column is, quietly, over it */
+	h2 {
+		margin: 0 0 0.75rem;
+		color: var(--ink-soft);
+		font-size: 1rem;
+		font-weight: 600;
+	}
+
+	.years {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		margin-bottom: clamp(1.5rem, 4vw, 3rem);
+		font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+	}
+
+	/* Set as the start of a sentence the picked year finishes */
+	.years h2 {
+		/* As far from the first year as each year is from the next: a button's padding and border */
+		margin: 0 calc(0.5em + 2px) 0 0;
+		color: var(--ink);
+		font-size: inherit;
+		font-weight: 400;
+	}
+
+	/* Numerals have no descenders, so the line's room for them is moved above, to sit the
+	   digits in the middle of the ring. And as tall as capitals, in a heavier weight, they look
+	   to float above the lowercase words before them on the same baseline, so they're set a
+	   touch lower, by eye */
+	.years button {
+		padding: calc(0.25rem + 0.125em) 0.5em calc(0.25rem - 0.125em);
+		translate: 0 0.05em;
+		border: 2px solid transparent;
+		border-radius: var(--round);
+		background: none;
+		color: var(--ink-soft);
+		font: inherit;
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			color 0.15s ease,
+			border-color 0.15s ease,
+			scale 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+	}
+
+	.years button:hover {
+		color: var(--ink);
+	}
+
+	/* A press is felt, as the request's buttons are, though not with reduced motion */
+	.years button:active {
+		scale: 0.97;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.years button:active {
+			scale: none;
+		}
+	}
+
+	/* With only this year's holidays out, the year is simply the end of the sentence */
+	.year {
+		font-weight: 600;
+	}
+
+	.years [aria-pressed='true'] {
+		border-color: var(--ink);
+		color: var(--ink);
+	}
+
+	.months {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+		gap: 2rem clamp(1.5rem, 3vw, 2.5rem);
+	}
+
+	h3 {
+		margin: 0 0 0.5rem;
+		padding-bottom: 0.375rem;
+		border-bottom: 2px solid var(--ink);
+		font-size: 1.125rem;
+		font-weight: 700;
+	}
+
+	ol {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	li {
+		display: grid;
+		grid-template-columns: 2.75rem minmax(0, 1fr);
+		grid-template-areas: 'day name' 'day when';
+		column-gap: 0.75rem;
+		padding: 0.5rem 0.5rem 0.5rem 0;
+		border-radius: var(--radius);
+		line-height: 1.3;
+	}
+
+	li time {
+		grid-area: day;
+		justify-self: end;
+		font-size: 2.25rem;
+		font-weight: 600;
+		line-height: 1;
+	}
+
+	.name {
+		grid-area: name;
+		font-weight: 600;
+		text-wrap: pretty;
+	}
+
+	.when {
+		grid-area: when;
+		color: var(--ink-soft);
+		font-size: 0.875rem;
+	}
+
+	/* Struck through and quieter once it's passed, but never too faint to read */
+	li.passed {
+		color: var(--ink-faint);
+	}
+
+	li.passed .when {
+		color: inherit;
+	}
+
+	li.passed .name {
+		text-decoration: line-through;
+		text-decoration-thickness: 1px;
+	}
+
+	.over {
+		display: none;
+	}
+
+	/* Shown, before the first paint, only once there's one gone by: see src/app.html */
+	.fold,
+	.tally {
+		display: none;
+	}
+
+	.fold {
+		color: var(--ink-faint);
+	}
+
+	.fold h3 {
+		border-color: currentColor;
+	}
+
+	.tally p {
+		margin: 0;
+		padding: 0.5rem 0 0.25rem;
+		font-size: 1.125rem;
+		line-height: 1.3;
+	}
+
+	/* A quiet line of text that says what it does, underlined as a link would be */
+	.earlier {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--ink-soft);
+		font: inherit;
+		font-size: 0.875rem;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 0.18em;
+		cursor: pointer;
+	}
+
+	.earlier:hover {
+		color: var(--ink);
+		text-decoration-thickness: 2px;
+	}
+
+	/* The next holiday, picked out in reverse */
+	/* Within the column, flush with the month's rule above it */
+	li.next {
+		background: #f6cf4f;
+		color: #0b2746;
+	}
+
+	li.next .when {
+		color: inherit;
+	}
+
+	.note {
+		margin: 2rem 0 0;
+		color: var(--ink-soft);
+		font-size: 0.875rem;
+	}
+
+	/* Beside the holidays, held in view as they scroll past */
 	.request {
 		grid-area: request;
+		position: sticky;
+		top: max(var(--gutter), env(safe-area-inset-top));
+		/* its first line on the baseline of the holidays' heading */
+		align-self: baseline;
 		display: flex;
+		flex-direction: column;
 		min-width: 0;
-		min-height: 0;
-		padding-top: var(--drop);
+		height: min(38rem, 100dvh - 2 * var(--gutter));
 	}
 
 	.foot {
-		grid-area: github;
+		grid-area: foot;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		justify-content: flex-end;
-		padding-top: 1rem;
-	}
-
-	/* In the serif of the line under the title, which it answers */
-	.languages {
-		grid-area: languages;
-		display: flex;
-		justify-content: flex-end;
+		justify-content: space-between;
 		gap: 1rem;
-		margin-bottom: 1rem;
-		font-family: 'Newsreader Variable', Georgia, var(--serif-cjk), serif;
-		font-weight: 450;
-		font-size: 1.0625rem;
-	}
-
-	.languages a,
-	.foot a {
+		margin-top: clamp(3rem, 6vw, 5rem);
 		color: var(--ink-soft);
-		text-decoration: none;
 	}
 
-	/* Small, so it takes the full ink in the evening shade */
-	:global(:root:is([data-sky='dawn'], [data-sky='dusk'])) :is(.languages, .foot) a {
+	.foot p {
+		margin: 0;
+	}
+
+	.foot a {
 		color: var(--ink);
-	}
-
-	.languages a:hover,
-	.foot a:hover {
-		color: var(--ink);
-	}
-
-	.languages a {
-		position: relative;
-		transition: color 0.2s ease;
-	}
-
-	/* a separate line so it can glide to the next chosen language */
-	.languages [aria-current='page'] {
-		color: var(--ink);
-	}
-
-	.chosen {
-		position: absolute;
-		left: 0;
-		right: 0;
-		bottom: 0.05em;
-		height: 1px;
-		background: currentColor;
-		/* glides from the last language, see afterNavigate */
-		transform-origin: left;
 	}
 
 	.github {
-		display: flex;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5em;
 	}
 
 	.github svg {
-		width: 1.125rem;
-		height: 1.125rem;
+		flex: none;
+		width: 1.25em;
+		height: 1.25em;
 		fill: currentColor;
 	}
 
-	/* Narrow, the page is stacked, except on a phone on its side, which keeps the columns. A
-	   folding phone's cover screen on its side is as short, but squarer than 16:9 as the
-	   folding phone's sky above is, too narrow for two columns, so it's stacked too */
-	@media (max-width: 900px) and (max-aspect-ratio: 16/9),
-		(max-width: 900px) and (min-height: 501px) {
+	/* Narrow, everything stacks, the request under the holidays at the height of its docs */
+	@media (max-width: 56.25em) {
 		.page {
 			grid-template-columns: minmax(0, 1fr);
-			/* The link sits at the foot of the screen, however short the page */
-			grid-template-rows: auto auto auto auto 1fr;
-			grid-template-areas: 'languages' 'header' 'scene' 'request' 'github';
+			grid-template-areas: 'masthead' 'plate' 'almanac' 'request' 'foot';
+		}
+
+		.plate {
+			height: min(70vw, 75svh);
+		}
+
+		/* Below the holidays now, a section of its own, set well apart from them */
+		.request {
+			position: static;
 			height: auto;
-			min-height: 100dvh;
-			overflow: visible;
-			--gutter: 1.5rem;
-			padding-top: 1.25rem;
-		}
-
-		.scene {
-			height: 75vw;
-			/* and on a short screen, such as a folding phone's cover on its side, no more than
-			   most of it, so the title and the bridge both show as the page opens */
-			max-height: min(30rem, 65svh);
-			margin: 1.5rem calc(-1 * var(--right)) 1.5rem calc(-1 * var(--left));
-		}
-
-		.page {
-			--drop: 0px;
-		}
-
-		/* Wider than a phone, the words keep to a column in the middle as wide as the title,
-		   so the request isn't left against one side with the screen empty beside it; the
-		   bridge still runs edge to edge */
-		.languages,
-		header,
-		.request,
-		.foot {
-			justify-self: center;
-			width: 100%;
-			max-width: 32rem;
-		}
-
-		/* Hung from the same edge as everything below it */
-		.languages {
-			justify-content: flex-start;
-			margin-bottom: 1.25rem;
-		}
-
-		/* Hung from the same edge as everything above it */
-		.foot {
-			align-self: end;
-			justify-content: flex-start;
-			padding-top: 1.5rem;
-		}
-	}
-
-	/* A phone on its side is as short as a letterbox, so rather than squeeze into it, the page
-	   scrolls: the request takes a column as tall as its docs, and the title sits over the
-	   bridge in the other, under the languages. The bridge fills the rest of the first screen
-	   and no more, about 9rem under the languages and the title, however long the docs make
-	   the page: stretched to their height, it would draw a sea as tall as the page. The link
-	   to the code waits under the docs, where it does on a wider screen */
-	@media (max-height: 500px) and (min-aspect-ratio: 1601/900) {
-		.page {
-			grid-template-columns: minmax(0, 1fr) 21rem;
-			grid-template-rows: auto auto max(60svh, 100svh - 9rem) 1fr auto;
-			grid-template-areas:
-				'languages request'
-				'header request'
-				'scene request'
-				'. request'
-				'. github';
-			column-gap: 2rem;
-			--gutter: 1.5rem;
-			--drop: 0px;
-			height: auto;
-			min-height: 100dvh;
-			overflow: visible;
-			padding-top: 1.25rem;
-		}
-
-		/* The title is sized to keep to one line across its column, about 11.6em with the
-		   flag, and to the height of the screen, which is what's short */
-		header {
-			container-type: inline-size;
-		}
-
-		/* The languages sit on the same baseline as the request beside them: in Newsreader,
-		   set solid, the baseline is 0.78em down its line, and in the request's IBM Plex Mono,
-		   at the size set in src/lib/Request.svelte, 0.975em down */
-		.languages {
-			justify-content: flex-start;
-			margin: calc(0.975 * clamp(1.5rem, 2.3vw, 2rem) - 0.78em) 0 0.75rem;
-			line-height: 1.08;
-		}
-
-		h1 {
-			font-size: clamp(1.75rem, min(10svh, 100cqi / 11.6), 2.75rem);
-		}
-
-		header p {
-			margin-top: 0.5rem;
-			font-size: clamp(1.0625rem, 5svh, 1.25rem);
-		}
-
-		/* Clear of the request beside it, which the feathered edge leads into */
-		.scene {
-			margin: 0.5rem 0 0 calc(-1 * var(--left));
+			margin-top: clamp(4rem, 14vw, 6rem);
 		}
 	}
 </style>

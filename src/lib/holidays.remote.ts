@@ -19,7 +19,11 @@ export const getPage = prerender(
 		// english is the default so it is requested without ?lang= and varies with Accept-Language
 		const negotiated = language === 'en';
 		const previewHeaders = [...named(body, { language, negotiated }).headers];
-		return { year, years: available, previewHeaders };
+		// the holidays of this year and any after it, named in the page's language, for the
+		// almanac: years gone by are still in the API, but nobody's planning around them
+		const ahead = years.filter((y) => y.year >= year);
+		const holidays = Object.fromEntries(ahead.map((y) => [y.year, inYear(y, language).holidays]));
+		return { year, years: ahead.map((y) => y.year), previewHeaders, holidays };
 	},
 	{ inputs: () => [...locales] }
 );
