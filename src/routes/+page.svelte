@@ -640,8 +640,10 @@
 		fill: currentColor;
 	}
 
-	/* Narrow, the page is stacked, except on a phone on its side, which keeps the columns */
-	@media (max-width: 900px) and (orientation: portrait),
+	/* Narrow, the page is stacked, except on a phone on its side, which keeps the columns. A
+	   folding phone's cover screen on its side is as short, but nearly square, too narrow
+	   for two columns, so it's stacked too */
+	@media (max-width: 900px) and (max-aspect-ratio: 3/2),
 		(max-width: 900px) and (min-height: 501px) {
 		.page {
 			grid-template-columns: minmax(0, 1fr);
@@ -657,7 +659,9 @@
 
 		.scene {
 			height: 75vw;
-			max-height: 30rem;
+			/* and on a short screen, such as a folding phone's cover on its side, no more than
+			   most of it, so the title and the bridge both show as the page opens */
+			max-height: min(30rem, 65svh);
 			margin: 1.5rem calc(-1 * var(--right)) 1.5rem calc(-1 * var(--left));
 		}
 
@@ -697,7 +701,7 @@
 	   and no more, about 9rem under the languages and the title, however long the docs make
 	   the page: stretched to their height, it would draw a sea as tall as the page. The link
 	   to the code waits under the docs, where it does on a wider screen */
-	@media (orientation: landscape) and (max-height: 500px) {
+	@media (max-height: 500px) and (min-aspect-ratio: 1501/1000) {
 		.page {
 			grid-template-columns: minmax(0, 1fr) 21rem;
 			grid-template-rows: auto auto max(60svh, 100svh - 9rem) 1fr auto;
