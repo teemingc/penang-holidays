@@ -9,7 +9,7 @@
 	import plex400 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url';
 	import plex600 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2?url';
 	import { onMount } from 'svelte';
-	import { onNavigate } from '$app/navigation';
+	import { afterNavigate, onNavigate } from '$app/navigation';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
 	import type { Path } from '$app/types';
@@ -63,19 +63,46 @@
 		document.documentElement.lang = TAGS[language];
 	});
 
-	// only the named parts are captured so the scene and the request stay live
-	// names are set only during a switch since a name puts the words behind the canvas
-	onNavigate((navigation) => {
-		if (!document.startViewTransition) return;
-		const root = document.documentElement;
-		root.classList.add('switching');
-		return new Promise((resolve) => {
-			const transition = document.startViewTransition(async () => {
-				resolve();
-				await navigation.complete;
-			});
-			transition.finished.finally(() => root.classList.remove('switching'));
-		});
+	let languages = $state<HTMLElement>();
+
+	// A switch of language animates the elements themselves, not a view transition: Safari
+	// lays its snapshots out a little off when the page is scrolled or its bars move, so the
+	// real words jerked into place as they took over at the end. The new words fade in where
+	// they are, and the underline glides from the old language to the new
+	let underlineFrom: DOMRect | undefined;
+	onNavigate(({ from, to }) => {
+		// each language is its own path, / or /ms
+		if (from?.url.pathname === to?.url.pathname) return;
+		underlineFrom = languages?.querySelector('.chosen')?.getBoundingClientRect();
+	});
+	afterNavigate(() => {
+		const from = underlineFrom;
+		underlineFrom = undefined;
+		if (!from || !header) return;
+		const words = [...header.querySelectorAll('h1, p')];
+		if (reducedMotion.current) {
+			for (const el of words) el.animate({ opacity: [0, 1] }, { duration: 200, easing: 'ease' });
+			return;
+		}
+		for (const el of words) {
+			el.animate(
+				{
+					opacity: [0, 1],
+					filter: ['blur(2px)', 'blur(0)'],
+					transform: ['translateY(4px)', 'none']
+				},
+				{ duration: 240, easing: 'cubic-bezier(0.19, 1, 0.22, 1)' }
+			);
+		}
+		const underline = languages?.querySelector('.chosen');
+		if (!underline) return;
+		const to = underline.getBoundingClientRect();
+		underline.animate(
+			{
+				transform: [`translateX(${from.left - to.left}px) scaleX(${from.width / to.width})`, 'none']
+			},
+			{ duration: 250, easing: 'cubic-bezier(0.645, 0.045, 0.355, 1)' }
+		);
 	});
 
 	const rgb = ([r, g, b]: number[]) => `rgb(${Math.round(r!)} ${Math.round(g!)} ${Math.round(b!)})`;
@@ -133,7 +160,7 @@
 <div class="page">
 	<!-- first, so it is to hand as the page opens. client navigation without a reset keeps
      the scene running, the scroll position and focus -->
-	<nav class="languages" aria-label={m.languages()}>
+	<nav class="languages" aria-label={m.languages()} bind:this={languages}>
 		{#each locales as locale (locale)}
 			<a
 				href={resolve(localizeHref('/', { locale }) as Path)}
@@ -587,7 +614,7 @@
 		transition: color 0.2s ease;
 	}
 
-	/* a separate line so it can move to the next chosen language */
+	/* a separate line so it can glide to the next chosen language */
 	.languages [aria-current='page'] {
 		color: var(--ink);
 	}
@@ -599,98 +626,8 @@
 		bottom: 0.05em;
 		height: 1px;
 		background: currentColor;
-	}
-
-	/* named only during a language switch, see onNavigate */
-	:global(:root.switching) {
-		view-transition-name: none;
-	}
-
-	:global(:root.switching) h1 {
-		view-transition-name: heading;
-	}
-
-	:global(:root.switching) header p {
-		view-transition-name: sourced;
-	}
-
-	:global(:root.switching) .chosen {
-		view-transition-name: chosen;
-	}
-
-	/* let clicks through the view transition overlay */
-	:global(::view-transition) {
-		pointer-events: none;
-	}
-
-	/* old and new words keep their own size from the line start instead of stretching */
-	:global(::view-transition-old(heading)),
-	:global(::view-transition-new(heading)),
-	:global(::view-transition-old(sourced)),
-	:global(::view-transition-new(sourced)) {
-		inline-size: auto;
-		block-size: auto;
-	}
-
-	:global(::view-transition-old(heading)),
-	:global(::view-transition-old(sourced)) {
-		animation: words-out 150ms cubic-bezier(0.19, 1, 0.22, 1) both;
-	}
-
-	:global(::view-transition-new(heading)),
-	:global(::view-transition-new(sourced)) {
-		animation: words-in 240ms cubic-bezier(0.19, 1, 0.22, 1) both;
-	}
-
-	@keyframes -global-words-out {
-		to {
-			opacity: 0;
-			filter: blur(2px);
-		}
-	}
-
-	@keyframes -global-words-in {
-		from {
-			opacity: 0;
-			filter: blur(2px);
-			transform: translateY(4px);
-		}
-	}
-
-	/* the flag fades with the words, a glide to the end of the new title would cross them
-	   whenever the lines break differently */
-	:global(::view-transition-group(chosen)) {
-		animation-duration: 250ms;
-		animation-timing-function: cubic-bezier(0.645, 0.045, 0.355, 1);
-	}
-
-	/* reduced motion only fades the words */
-	@media (prefers-reduced-motion: reduce) {
-		:global(::view-transition-old(heading)),
-		:global(::view-transition-old(sourced)) {
-			animation: fade-out 150ms ease both;
-		}
-
-		:global(::view-transition-new(heading)),
-		:global(::view-transition-new(sourced)) {
-			animation: fade-in 200ms ease both;
-		}
-
-		:global(::view-transition-group(chosen)) {
-			animation-duration: 0s;
-		}
-	}
-
-	@keyframes -global-fade-out {
-		to {
-			opacity: 0;
-		}
-	}
-
-	@keyframes -global-fade-in {
-		from {
-			opacity: 0;
-		}
+		/* glides from the last language, see afterNavigate */
+		transform-origin: left;
 	}
 
 	.github {
