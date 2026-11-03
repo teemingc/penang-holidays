@@ -15,6 +15,7 @@
 	import { fade } from 'svelte/transition';
 	import type { Language } from './languages.js';
 	import { m } from './paraglide/messages.js';
+	import type { Locale } from './paraglide/runtime.js';
 	import { morpher, scrambler, tokenize, type Token } from './terminal.js';
 
 	let { language, path, url, previewHeaders, reducedMotion }: Props = $props();
@@ -27,19 +28,24 @@
 	// What each field of the response means, in the order they come, shown until the request's
 	// sent and again whenever they're asked for. Short enough to fit a phone without wrapping
 	// english and chinese names come with the malay originalName
-	const originalName = $derived(
-		language === 'ms' ? '' : `\n      "originalName": string,  // ${m.docs_original_name()}`
-	);
-	const DOCS = $derived(`{
+	// in the page's language, or in another to measure by
+	const docs = (language: Language, locale?: Locale) => {
+		const originalName =
+			language === 'ms'
+				? ''
+				: `\n      "originalName": string,  // ${m.docs_original_name({}, { locale })}`;
+		return `{
   "holidays": [
     {
       "date": string,  // YYYY-MM-DD
-      "name": string,  // ${m.docs_name()}${originalName}
+      "name": string,  // ${m.docs_name({}, { locale })}${originalName}
       "type": "federal" | "state",
-      "tentative": boolean  // ${m.docs_tentative()}
+      "tentative": boolean  // ${m.docs_tentative({}, { locale })}
     }
   ]
-}`);
+}`;
+	};
+	const DOCS = $derived(docs(language));
 
 	let stage = $state<'idle' | 'sending' | 'done'>('idle');
 	// The docs, or the response to the last request
@@ -185,6 +191,10 @@
 
 	const tokens = $derived(tokenize(shown));
 	const docsTokens = $derived(tokenize(DOCS));
+	// english has the most lines, with originalName, so the box is sized by whichever of it and
+	// the docs shown is taller: switching language then leaves the page its height, where a
+	// shorter page would jump when scrolled to the foot
+	const tallestTokens = tokenize(docs('en', 'en'));
 
 	// on a language switch the docs glitch into the new words, or a shown response is fetched again
 	// svelte-ignore state_referenced_locally
@@ -308,13 +318,15 @@
 
 	<!-- Fading back while the request's on its way, until the response glitches in over it -->
 	<div class={['terminal', { waiting: stage === 'sending' }]}>
-		<!-- Unseen, the docs as they first show, to size the box by on a phone -->
-		<div class="fit" aria-hidden="true">
-			<div class="headers">
-				{@render headerList(exampleHeaders)}
+		<!-- Unseen, the docs as they first show and in english, to size the box by on a phone -->
+		{#each [docsTokens, tallestTokens] as fit, i (i)}
+			<div class="fit" aria-hidden="true">
+				<div class="headers">
+					{@render headerList(exampleHeaders)}
+				</div>
+				<pre>{@render json(fit)}</pre>
 			</div>
-			<pre>{@render json(docsTokens)}</pre>
-		</div>
+		{/each}
 		<div class="scroll">
 			<!-- With the docs, the headers the response comes with, a little fainter -->
 			<div class={['headers', { ghost: !shownStatus }]}>

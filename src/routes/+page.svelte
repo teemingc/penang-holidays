@@ -614,10 +614,6 @@
 		view-transition-name: sourced;
 	}
 
-	:global(:root.switching) .flag {
-		view-transition-name: flag;
-	}
-
 	:global(:root.switching) .chosen {
 		view-transition-name: chosen;
 	}
@@ -661,7 +657,8 @@
 		}
 	}
 
-	:global(::view-transition-group(flag)),
+	/* the flag fades with the words, a glide to the end of the new title would cross them
+	   whenever the lines break differently */
 	:global(::view-transition-group(chosen)) {
 		animation-duration: 250ms;
 		animation-timing-function: cubic-bezier(0.645, 0.045, 0.355, 1);
@@ -679,7 +676,6 @@
 			animation: fade-in 200ms ease both;
 		}
 
-		:global(::view-transition-group(flag)),
 		:global(::view-transition-group(chosen)) {
 			animation-duration: 0s;
 		}
