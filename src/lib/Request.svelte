@@ -12,6 +12,7 @@
 	}
 
 	import { onDestroy, untrack } from 'svelte';
+	import { cubicOut } from 'svelte/easing';
 	import { fade } from 'svelte/transition';
 	import type { Language } from './languages.js';
 	import { m } from './paraglide/messages.js';
@@ -266,7 +267,7 @@
 			</span>
 		</button>
 		{#if shownStatus}
-			<p class="status" in:fade={{ duration: reducedMotion ? 0 : 180 }}>
+			<p class="status" in:fade={{ duration: reducedMotion ? 0 : 180, easing: cubicOut }}>
 				<span>{shownStatus}</span>
 				<span class="time">{shownTime}</span>
 			</p>
@@ -361,6 +362,21 @@
 	button:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 3px;
+	}
+
+	/* Small as they're drawn, each can be touched across the 44px a finger needs */
+	.copy,
+	.send {
+		position: relative;
+	}
+
+	.copy::before,
+	.send::before {
+		content: '';
+		position: absolute;
+		inset: 50% 0 auto;
+		height: max(100%, 2.75rem);
+		translate: 0 -50%;
 	}
 
 	/* A quiet word after the path, with its glyph */

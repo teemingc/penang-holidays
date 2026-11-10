@@ -524,8 +524,7 @@
 			aria-valuemax={1439}
 			aria-valuenow={minutes}
 			aria-valuetext={time}
-			style:left="{at.x}px"
-			style:top="{at.y}px"
+			style:translate="calc({at.x}px - 50%) calc({at.y}px - 50%)"
 			onpointerdown={(event) => grab(body, event)}
 			onpointermove={drag}
 			onpointerup={letGo}
@@ -567,7 +566,9 @@
 		display: block;
 		/* The page's links stay clickable under the bridge's canvas */
 		pointer-events: none;
-		transition: opacity 0.6s ease-in;
+		/* Most of the way in at once, as the still over the bridge fades out just as fast, so the
+		   bridge never dims between the two */
+		transition: opacity 0.6s cubic-bezier(0.19, 1, 0.22, 1);
 	}
 
 	.scene:not(.shown) canvas {
@@ -583,12 +584,15 @@
 	/* Over the sun and the moon, to take hold of them by; only there while they're up */
 	.body {
 		position: absolute;
+		/* Moved from the scene's top left to be centred on the sun or the moon, without laying
+		   anything out again as it's dragged */
+		left: 0;
+		top: 0;
 		/* in front of the title, which it can rise behind */
 		z-index: 2;
 		width: 3.5rem;
 		height: 3.5rem;
 		border-radius: var(--round);
-		translate: -50% -50%;
 		cursor: grab;
 		touch-action: none;
 		visibility: hidden;

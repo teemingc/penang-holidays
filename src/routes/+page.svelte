@@ -77,6 +77,12 @@
 	// asked for, from the first paint, by a style src/app.html writes for the day it is, so the
 	// list never shrinks once the page knows the day itself
 	const all = $derived(data.holidays[year] ?? []);
+	// A holiday has no id of its own and two can fall on one date, so each is known by its date
+	// and which of that date's it is: the same in every language, so a switch changes its words
+	// in place
+	const ids = $derived(
+		all.map((h, i) => `${h.date}.${all.slice(0, i).filter((o) => o.date === h.date).length}`)
+	);
 	let showEarlier = $state(false);
 	const monthName = $derived(
 		new Intl.DateTimeFormat(TAGS[language], { month: 'long', timeZone: 'UTC' })
@@ -87,11 +93,12 @@
 		const tag = TAGS[language];
 		const weekday = new Intl.DateTimeFormat(tag, { weekday: 'long', timeZone: 'UTC' });
 		const relative = new Intl.RelativeTimeFormat(tag, { numeric: 'auto' });
-		const rows = holidays.map((h) => {
+		const rows = holidays.map((h, i) => {
 			const date = new Date(`${h.date}T00:00:00Z`);
 			const days = today ? Math.round((+date - +new Date(`${today}T00:00:00Z`)) / 864e5) : 0;
 			return {
 				...h,
+				id: ids[i]!,
 				day: date.getUTCDate(),
 				weekday: weekday.format(date),
 				passed: today ? h.date < today : false,
@@ -115,6 +122,7 @@
 		return all.map((h, i) => {
 			const last = monthName.format(new Date(`${h.date}T00:00:00Z`));
 			return {
+				id: ids[i]!,
 				date: h.date,
 				next: all[i + 1]?.date,
 				range: first === last ? last : `${first}–${last}`,
@@ -130,13 +138,14 @@
 	let masthead = $state<HTMLElement>();
 	// The sky the bridge is in, which its canvas reaches up to the top of
 	let pane = $state<HTMLElement>();
-	let almanac = $state<HTMLElement>();
+	// Only looked up when something happens, as the languages below are, so neither is state
+	let almanac: HTMLElement | undefined;
 
 	$effect(() => {
 		document.documentElement.lang = TAGS[language];
 	});
 
-	let languages = $state<HTMLElement>();
+	let languages: HTMLElement | undefined;
 
 	// A time of day being previewed, `?time=21:30`, carried over to the other language. Only
 	// read in the browser, as the page is prerendered
@@ -443,7 +452,7 @@
 		<div class={['months', { all: showEarlier }]}>
 			<!-- The holidays gone by, folded into the table's first place, but there to look back on -->
 			<div class="fold">
-				{#each tallies as tally (tally.date)}
+				{#each tallies as tally (tally.id)}
 					<div class="tally" data-date={tally.date} data-next={tally.next}>
 						<h3>{tally.range}</h3>
 						<p>{tally.count}</p>
@@ -460,7 +469,7 @@
 				<div class="month">
 					<h3>{month.name}</h3>
 					<ol>
-						{#each month.holidays as holiday, i (i)}
+						{#each month.holidays as holiday (holiday.id)}
 							<li class={{ passed: holiday.passed, next: holiday.next }} data-date={holiday.date}>
 								<time datetime={holiday.date}>{holiday.day}</time>
 								<span class="name">{holiday.name}{holiday.tentative ? ' *' : ''}</span>
@@ -889,9 +898,11 @@
 		scale: 0.97;
 	}
 
+	/* Pressed, it dims instead of shrinking, as the request's buttons do */
 	@media (prefers-reduced-motion: reduce) {
 		.years button:active {
 			scale: none;
+			opacity: 0.7;
 		}
 	}
 
@@ -1002,6 +1013,7 @@
 
 	/* A quiet line of text that says what it does, underlined as a link would be */
 	.earlier {
+		position: relative;
 		margin: 0;
 		padding: 0;
 		border: 0;
@@ -1018,6 +1030,15 @@
 	.earlier:hover {
 		color: var(--ink);
 		text-decoration-thickness: 2px;
+	}
+
+	/* One line of small text, touched across the 44px a finger needs */
+	.earlier::before {
+		content: '';
+		position: absolute;
+		inset: 50% 0 auto;
+		height: 2.75rem;
+		translate: 0 -50%;
 	}
 
 	/* The next holiday, picked out by its type alone: its day and how long till it, in the
