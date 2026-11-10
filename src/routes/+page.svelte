@@ -7,7 +7,7 @@
 	import newsreader from '@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2?url';
 	import plex400 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url';
 	import plex600 from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2?url';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { afterNavigate, onNavigate } from '$app/navigation';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
@@ -159,6 +159,24 @@
 	// lays its snapshots out a little off when the page is scrolled or its bars move, so the
 	// real words jerked into place as they took over at the end. The new words fade in where
 	// they are, through a slight blur, and the underline glides from the old language to the new
+	const fadeTiming = () => ({
+		duration: reducedMotion.current ? 200 : 240,
+		easing: 'cubic-bezier(0.19, 1, 0.22, 1)'
+	});
+	// With reduced motion, the words only fade
+	function fadeIn(words: Iterable<Element>) {
+		const frames = reducedMotion.current
+			? { opacity: [0, 1] }
+			: { opacity: [0, 1], filter: ['blur(2px)', 'blur(0)'] };
+		for (const el of words) el.animate(frames, fadeTiming());
+	}
+	// Another year's holidays take the place of this one's the same way
+	async function pick(y: number) {
+		if (y === year) return;
+		picked = y;
+		await tick();
+		fadeIn(almanac?.querySelectorAll('h3, time, .name, .when, .note') ?? []);
+	}
 	let switchedFrom: typeof language | undefined;
 	onNavigate(({ from, to }) => {
 		// each language is its own path, / or /ms
@@ -179,18 +197,9 @@
 		// The language line holds the underline, which has to stay in sight as it glides, so its
 		// words fade by their colour alone
 		const line = languages?.querySelectorAll('.languages > span, .languages a') ?? [];
-		const fade = {
-			duration: reducedMotion.current ? 200 : 240,
-			easing: 'cubic-bezier(0.19, 1, 0.22, 1)'
-		};
-		for (const el of line) el.animate([{ color: 'transparent' }, {}], fade);
-		if (reducedMotion.current) {
-			for (const el of words) el.animate({ opacity: [0, 1] }, fade);
-			return;
-		}
-		for (const el of words) {
-			el.animate({ opacity: [0, 1], filter: ['blur(2px)', 'blur(0)'] }, fade);
-		}
+		for (const el of line) el.animate([{ color: 'transparent' }, {}], fadeTiming());
+		fadeIn(words);
+		if (reducedMotion.current) return;
 		// From the old language's name, where the new sentence has put it
 		const underline = languages?.querySelector('.chosen');
 		const before = languages?.querySelector(`a[hreflang="${TAGS[old]}"]`);
@@ -442,7 +451,7 @@
 			{#if years.length > 1}
 				<h2 id="almanac-heading">{m.holidays_in()}</h2>
 				{#each years as y (y)}
-					<button aria-pressed={y === year} onclick={() => (picked = y)}>{y}</button>
+					<button aria-pressed={y === year} onclick={() => pick(y)}>{y}</button>
 				{/each}
 			{:else}
 				<h2 id="almanac-heading">{m.holidays_in()} <span class="year">{year}</span></h2>
@@ -984,6 +993,17 @@
 	li.passed .name {
 		text-decoration: line-through;
 		text-decoration-thickness: 1px;
+	}
+
+	/* Asked for, the ones gone by fade in where they'll be, to tell them from what was already
+	   there; put away again, they just go */
+	.months.all li.passed,
+	.months.all .month h3 {
+		transition: opacity 0.2s cubic-bezier(0.19, 1, 0.22, 1);
+
+		@starting-style {
+			opacity: 0;
+		}
 	}
 
 	.over {
