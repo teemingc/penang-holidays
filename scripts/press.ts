@@ -3,6 +3,18 @@ import { parse } from 'node-html-parser';
 
 export const PRESS_URL = 'https://www.moe.gov.my/kenyataan-media';
 
+/**
+ * An address on the ministry's own site, over https, or an error. The list and the pages it
+ * links to say where to go next, and nothing they say is followed anywhere else
+ */
+export function onMinistrySite(address: string, base?: string): string {
+	const url = new URL(address, base);
+	if (url.protocol !== 'https:' || url.hostname !== 'www.moe.gov.my') {
+		throw new Error(`${url.href} is not on the ministry's site`);
+	}
+	return url.href;
+}
+
 const MONTHS = [
 	'januari',
 	'februari',
@@ -65,7 +77,7 @@ export function parseReleaseList(html: string): Release[] {
 
 		return {
 			title: link.text.replace(/\s+/g, ' ').trim(),
-			url,
+			url: onMinistrySite(url, PRESS_URL),
 			date: iso(year!, monthIndex, day!)
 		};
 	});
@@ -80,7 +92,7 @@ export function addsSchoolHolidays({ title }: Release): boolean {
 export function parseReleasePage(html: string, url: string): string {
 	const href = parse(html).querySelector('a.doclink[href$=".pdf"]')?.getAttribute('href');
 	if (!href) throw new Error(`Found no PDF on ${url}`);
-	return new URL(href, url).href;
+	return onMinistrySite(href, url);
 }
 
 /**

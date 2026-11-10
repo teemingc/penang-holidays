@@ -5,6 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import type { YearHolidays } from '../src/lib/holidays.ts';
 import {
 	addsSchoolHolidays,
+	onMinistrySite,
 	parseRelease,
 	parseReleaseList,
 	parseReleasePage,
@@ -54,9 +55,11 @@ for (const release of releases) {
 
 	console.log(`${release.title}: ${added.length ? `added ${added.join(', ')}` : 'nothing new'}`);
 	if (added.length) {
+		// the title is the ministry's words, so it's set as code: nothing in it is Markdown, or
+		// a mention of anyone
 		summary.push(
-			`- [${release.title}](${release.url}), ${release.date} ([PDF](${pdf})): ` +
-				`${found.name} on ${added.join(', ')}`
+			`- \`${release.title.replaceAll('`', "'")}\`, ${release.date}: ` +
+				`${found.name} on ${added.join(', ')}. <${release.url}> (PDF: <${pdf}>)`
 		);
 	}
 }
@@ -98,11 +101,21 @@ async function add(date: string, name: string, announced: string, source: string
 	return true;
 }
 
-async function get(url: string): Promise<Response> {
-	const response = await fetch(url, {
+// Only from the ministry's site: a redirect is looked at before it's followed, and one that
+// leads anywhere else is an error
+async function get(url: string, redirects = 5): Promise<Response> {
+	const response = await fetch(onMinistrySite(url), {
 		headers: { 'user-agent': USER_AGENT },
+		redirect: 'manual',
 		signal: AbortSignal.timeout(60_000)
 	});
+
+	const location = response.headers.get('location');
+	if (response.status >= 300 && response.status < 400 && location) {
+		if (redirects === 0) throw new Error(`${url} redirects too many times`);
+		return get(onMinistrySite(location, url), redirects - 1);
+	}
+
 	if (!response.ok) throw new Error(`${url} responded with HTTP ${response.status}`);
 	return response;
 }

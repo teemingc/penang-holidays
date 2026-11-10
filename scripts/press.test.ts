@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from 'vitest';
-import { addsSchoolHolidays, parseRelease, parseReleaseList, parseReleasePage } from './press.ts';
+import {
+	addsSchoolHolidays,
+	onMinistrySite,
+	parseRelease,
+	parseReleaseList,
+	parseReleasePage
+} from './press.ts';
 import { readCalendar } from './school.ts';
 
 const fixture = (file: string) => readFile(new URL(`fixtures/${file}`, import.meta.url));
@@ -36,6 +42,23 @@ test('finds the PDF a release links to', () => {
 		'https://www.moe.gov.my/storage/files/shares/KM%20Cuti.pdf'
 	);
 	expect(() => parseReleasePage('<p>Tiada</p>', 'https://www.moe.gov.my/x')).toThrow(/no PDF/);
+});
+
+test("follows nothing off the ministry's site", () => {
+	expect(onMinistrySite('/storage/a.pdf', 'https://www.moe.gov.my/x')).toBe(
+		'https://www.moe.gov.my/storage/a.pdf'
+	);
+	for (const address of [
+		'http://www.moe.gov.my/a.pdf',
+		'https://example.com/a.pdf',
+		'https://www.moe.gov.my.example.com/a.pdf',
+		'file:///etc/passwd'
+	]) {
+		expect(() => onMinistrySite(address)).toThrow(/not on the ministry's site/);
+	}
+
+	const page = '<a class="doclink" href="https://example.com/cuti.pdf">Muat turun</a>';
+	expect(() => parseReleasePage(page, 'https://www.moe.gov.my/x')).toThrow(/not on the ministry/);
 });
 
 test('takes the days for every school, and for the group Penang is in', () => {

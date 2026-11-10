@@ -1,3 +1,7 @@
 allowBuilds:
   esbuild: true
   workerd: true
+
+overrides:
+  # 10 can be made to hang expanding a glob, which is fixed from 11.0.1; eslint asks for 10
+  minimatch: ^11.0.1

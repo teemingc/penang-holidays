@@ -11,9 +11,8 @@ on:
     # Every day at 9am in Malaysia
     - cron: '0 1 * * *'
 
-permissions:
-  contents: write
-  pull-requests: write
+# Nothing, but for the one job that opens the pull request
+permissions: {}
 
 concurrency:
   group: press-releases
@@ -24,10 +23,18 @@ env:
 jobs:
   press-releases:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      # The token isn't left in the checkout, so nothing that runs before the last step has it:
+      # not a dependency's install script, nor the code that reads what the ministry's site sends
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
           cache: pnpm
@@ -43,6 +50,8 @@ jobs:
             exit 0
           fi
 
+          # git pushes with the token from here on
+          gh auth setup-git
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -B "$BRANCH"
