@@ -8,6 +8,12 @@
 			"tentative": false
 		},
 		{
+			"date": "2023-01-20",
+			"name": "Cuti Perayaan Tahun Baru Cina",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2023-01-22",
 			"name": "Tahun Baru Cina",
 			"type": "federal",
@@ -26,9 +32,23 @@
 			"tentative": false
 		},
 		{
+			"date": "2023-02-18",
+			"endDate": "2023-03-12",
+			"name": "Cuti Akhir Persekolahan",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2023-04-08",
 			"name": "Hari Nuzul Al-Quran",
 			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2023-04-19",
+			"endDate": "2023-04-21",
+			"name": "Cuti Perayaan Hari Raya Aidilfitri",
+			"type": "school",
 			"tentative": false
 		},
 		{
@@ -36,6 +56,13 @@
 			"name": "Hari Raya Puasa",
 			"type": "federal",
 			"tentative": true
+		},
+		{
+			"date": "2023-04-22",
+			"endDate": "2023-04-30",
+			"name": "Cuti Pertengahan Penggal 1",
+			"type": "school",
+			"tentative": false
 		},
 		{
 			"date": "2023-04-23",
@@ -56,9 +83,22 @@
 			"tentative": false
 		},
 		{
+			"date": "2023-05-27",
+			"endDate": "2023-06-04",
+			"name": "Cuti Penggal 1",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2023-06-05",
 			"name": "Hari Keputeraan Seri Paduka Baginda Yang di-Pertuan Agong",
 			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-06-28",
+			"name": "Cuti Perayaan Hari Raya Qurban",
+			"type": "school",
 			"tentative": false
 		},
 		{
@@ -66,6 +106,12 @@
 			"name": "Hari Raya Qurban",
 			"type": "federal",
 			"tentative": true
+		},
+		{
+			"date": "2023-06-30",
+			"name": "Cuti Perayaan Hari Raya Qurban",
+			"type": "school",
+			"tentative": false
 		},
 		{
 			"date": "2023-07-07",
@@ -83,6 +129,13 @@
 			"date": "2023-07-19",
 			"name": "Awal Muharram (Maal Hijrah)",
 			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2023-08-26",
+			"endDate": "2023-09-03",
+			"name": "Cuti Penggal 2",
+			"type": "school",
 			"tentative": false
 		},
 		{
@@ -108,6 +161,19 @@
 			"name": "Hari Deepavali",
 			"type": "federal",
 			"tentative": true
+		},
+		{
+			"date": "2023-11-14",
+			"name": "Cuti Perayaan Hari Deepavali",
+			"type": "school",
+			"tentative": false
+		},
+		{
+			"date": "2023-12-16",
+			"endDate": "2024-01-01",
+			"name": "Cuti Penggal 3",
+			"type": "school",
+			"tentative": false
 		},
 		{
 			"date": "2023-12-25",

@@ -14,6 +14,12 @@
 			"tentative": false
 		},
 		{
+			"date": "2026-02-16",
+			"name": "Cuti Perayaan Tahun Baru Cina",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2026-02-17",
 			"name": "Tahun Baru Cina",
 			"type": "federal",
@@ -26,9 +32,23 @@
 			"tentative": false
 		},
 		{
+			"date": "2026-02-19",
+			"endDate": "2026-02-20",
+			"name": "Cuti Perayaan Tahun Baru Cina",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2026-03-07",
 			"name": "Hari Nuzul Al-Quran",
 			"type": "state",
+			"tentative": false
+		},
+		{
+			"date": "2026-03-18",
+			"endDate": "2026-03-20",
+			"name": "Cuti Perayaan Hari Raya Aidilfitri",
+			"type": "school",
 			"tentative": false
 		},
 		{
@@ -36,6 +56,13 @@
 			"name": "Hari Raya Puasa",
 			"type": "federal",
 			"tentative": true
+		},
+		{
+			"date": "2026-03-21",
+			"endDate": "2026-03-29",
+			"name": "Cuti Penggal 1",
+			"type": "school",
+			"tentative": false
 		},
 		{
 			"date": "2026-03-22",
@@ -47,6 +74,13 @@
 			"date": "2026-05-01",
 			"name": "Hari Pekerja",
 			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2026-05-23",
+			"endDate": "2026-06-07",
+			"name": "Cuti Pertengahan Tahun",
+			"type": "school",
 			"tentative": false
 		},
 		{
@@ -98,6 +132,13 @@
 			"tentative": false
 		},
 		{
+			"date": "2026-08-29",
+			"endDate": "2026-09-06",
+			"name": "Cuti Penggal 2",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2026-08-31",
 			"name": "Hari Kebangsaan",
 			"type": "federal",
@@ -114,6 +155,19 @@
 			"name": "Hari Deepavali",
 			"type": "federal",
 			"tentative": true
+		},
+		{
+			"date": "2026-11-10",
+			"name": "Cuti Perayaan Hari Deepavali",
+			"type": "school",
+			"tentative": false
+		},
+		{
+			"date": "2026-12-05",
+			"endDate": "2026-12-31",
+			"name": "Cuti Akhir Persekolahan",
+			"type": "school",
+			"tentative": false
 		},
 		{
 			"date": "2026-12-25",

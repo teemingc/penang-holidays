@@ -31,7 +31,7 @@ function preferred(header: string | null): Language | undefined {
 		.find(isLanguage);
 }
 
-/** originalName keeps the name the portal publishes */
+/** originalName keeps the name as published */
 export type NamedHoliday = Holiday & { originalName?: string };
 
 /** an untranslated name stays in malay without originalName */
@@ -39,6 +39,6 @@ export function nameIn(holiday: Holiday, language: Language): NamedHoliday {
 	const name = language === 'ms' ? undefined : translate(holiday.name, language);
 	if (!name) return holiday;
 
-	const { date, type, tentative } = holiday;
-	return { date, name, originalName: holiday.name, type, tentative };
+	const { date, endDate, type, tentative } = holiday;
+	return { date, ...(endDate && { endDate }), name, originalName: holiday.name, type, tentative };
 }

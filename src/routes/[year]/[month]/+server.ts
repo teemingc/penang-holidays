@@ -1,6 +1,14 @@
 import { getYear } from '#lib/holidays.js';
 import { chooseLanguage } from '#lib/server/language.js';
-import { inMonth, json, languageNotFound, named, yearNotFound } from '#lib/server/response.js';
+import {
+	chooseTypes,
+	inMonth,
+	json,
+	languageNotFound,
+	named,
+	typeNotFound,
+	yearNotFound
+} from '#lib/server/response.js';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ params, url, request }) => {
@@ -15,5 +23,8 @@ export const GET: RequestHandler = ({ params, url, request }) => {
 	const chosen = chooseLanguage(url, request.headers);
 	if (!chosen) return languageNotFound();
 
-	return named(inMonth(year, month, chosen.language), chosen);
+	const types = chooseTypes(url);
+	if (!types) return typeNotFound();
+
+	return named(inMonth(year, month, chosen.language, types), chosen);
 };

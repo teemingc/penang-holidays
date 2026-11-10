@@ -1,0 +1,60 @@
+name: School holiday press releases
+
+# The ministry adds days off school after its calendar is out, most years one before Hari Raya
+# Aidilfitri, and says so in a press release rather than in the calendar. This reads its new
+# press releases and opens a pull request with the days they add for schools in Penang.
+# A release it can't be sure of fails the run, for someone to read.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every day at 9am in Malaysia
+    - cron: '0 1 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: press-releases
+
+env:
+  BRANCH: school-holiday-press-releases
+
+jobs:
+  press-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/press-releases.ts "$RUNNER_TEMP/pull-request.md"
+      - run: pnpm test
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- scripts data; then
+            echo "No new days off school"
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$BRANCH"
+          git add scripts data
+          git commit -m 'Add the days off school from a ministry press release'
+          # the branch is this workflow's own, made again from main on every run
+          git push --force origin "$BRANCH"
+
+          if [ "$(gh pr view "$BRANCH" --json state --jq .state 2>/dev/null)" = 'OPEN' ]; then
+            gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/pull-request.md"
+          else
+            gh pr create --head "$BRANCH" --base main \
+              --title 'Add the days off school from a ministry press release' \
+              --body-file "$RUNNER_TEMP/pull-request.md"
+          fi

@@ -39,8 +39,9 @@
   "holidays": [
     {
       "date": string,  // YYYY-MM-DD
+      "endDate": string,  // ${m.docs_end_date({}, { locale })}
       "name": string,  // ${m.docs_name({}, { locale })}${originalName}
-      "type": "federal" | "state",
+      "type": "federal" | "state" | "school",
       "tentative": boolean  // ${m.docs_tentative({}, { locale })}
     }
   ]
@@ -243,7 +244,7 @@
 		</div>
 	</div>
 
-	<!-- One key heads the column: Send while the docs are up, Read docs once the response is.
+	<!-- One key heads the column: Send while the docs are up, Show fields once the response is.
 	     Both labels share its place, as wide as the longer, and swap there, so nothing on the row
 	     moves when they do or when the status lands beside them -->
 	<div class="bar">
@@ -263,7 +264,7 @@
 						<path d="M8 4.25v9.25" />
 					</svg>
 				</span>
-				{m.read_docs()}
+				{m.show_fields()}
 			</span>
 		</button>
 		{#if shownStatus}

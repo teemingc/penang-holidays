@@ -24,7 +24,7 @@
 	import { TAGS } from '#lib/languages.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, locales, localizeHref } from '#lib/paraglide/runtime.js';
-	import { SOURCE_URL } from '#lib/source.js';
+	import { SCHOOL_SOURCE_URL, SOURCE_URL } from '#lib/source.js';
 	import {
 		currentYear,
 		inksAcross,
@@ -76,44 +76,76 @@
 	// The year's holidays by month, the next one marked. The ones gone by are hidden until
 	// asked for, from the first paint, by a style src/app.html writes for the day it is, so the
 	// list never shrinks once the page knows the day itself
-	const all = $derived(data.holidays[year] ?? []);
+	// The school holidays are shown with them but set apart, and counted as none of this: they
+	// aren't days off work.
 	// A holiday has no id of its own and two can fall on one date, so each is known by its date
 	// and which of that date's it is: the same in every language, so a switch changes its words
 	// in place
-	const ids = $derived(
-		all.map((h, i) => `${h.date}.${all.slice(0, i).filter((o) => o.date === h.date).length}`)
-	);
+	const everything = $derived.by(() => {
+		const holidays = data.holidays[year] ?? [];
+		return holidays.map((h, i) => ({
+			...h,
+			id: `${h.date}.${holidays.slice(0, i).filter((o) => o.date === h.date).length}`
+		}));
+	});
+	const all = $derived(everything.filter((h) => h.type !== 'school'));
 	let showEarlier = $state(false);
 	const monthName = $derived(
 		new Intl.DateTimeFormat(TAGS[language], { month: 'long', timeZone: 'UTC' })
 	);
 	const months = $derived.by(() => {
-		const holidays = all;
-		const next = today ? holidays.find((h) => h.date >= today!)?.date : undefined;
+		const next = today ? all.find((h) => h.date >= today!)?.date : undefined;
 		const tag = TAGS[language];
 		const weekday = new Intl.DateTimeFormat(tag, { weekday: 'long', timeZone: 'UTC' });
 		const relative = new Intl.RelativeTimeFormat(tag, { numeric: 'auto' });
-		const rows = holidays.map((h, i) => {
+		// A school holiday's days: Monday, 16 Feb for one, and 21 – 29 Mar for a run of them
+		const one = new Intl.DateTimeFormat(tag, {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'short',
+			timeZone: 'UTC'
+		});
+		const run = new Intl.DateTimeFormat(tag, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+		const rows = everything.map((h) => {
 			const date = new Date(`${h.date}T00:00:00Z`);
 			const days = today ? Math.round((+date - +new Date(`${today}T00:00:00Z`)) / 864e5) : 0;
+			const school = h.type === 'school';
+			// A school holiday is gone once its last day is
+			const last = h.endDate ?? h.date;
 			return {
 				...h,
-				id: ids[i]!,
+				school,
+				last,
 				day: date.getUTCDate(),
 				weekday: weekday.format(date),
-				passed: today ? h.date < today : false,
-				next: h.date === next,
+				days: h.endDate ? run.formatRange(date, new Date(`${last}T00:00:00Z`)) : one.format(date),
+				passed: today ? last < today : false,
+				next: !school && h.date === next,
 				until: relative.format(days, 'day')
 			};
 		});
-		return [...Map.groupBy(rows, (row) => row.date.slice(0, 7))].map(([key, holidays]) => ({
+		// Each is under its month, and one that runs into other months is under those too, at
+		// their head: the months of this year it has days in, so one that began the year before,
+		// as the school holiday over the new year does, starts under January
+		const within = (month: string) => (month < `${year}-01` ? `${year}-01` : month.slice(0, 7));
+		const placed = rows.flatMap((row) => {
+			const first = within(row.date);
+			const final = row.last > `${year}-12-31` ? `${year}-12` : row.last.slice(0, 7);
+			const count = Number(final.slice(5)) - Number(first.slice(5)) + 1;
+			return Array.from({ length: count }, (_, i) => ({
+				key: `${year}-${String(Number(first.slice(5)) + i).padStart(2, '0')}`,
+				// the ones running on from an earlier month come before the month's own
+				order: i === 0 && first === row.date.slice(0, 7) ? row.date : '',
+				row
+			}));
+		});
+		placed.sort((a, b) => a.key.localeCompare(b.key) || a.order.localeCompare(b.order));
+		return [...Map.groupBy(placed, ({ key }) => key)].map(([key, holidays]) => ({
 			key,
 			name: monthName.format(new Date(`${key}-01T00:00:00Z`)),
-			holidays
+			holidays: holidays.map(({ row }) => row)
 		}));
 	});
-
-	const tentative = $derived(all.some((h) => h.tentative));
 
 	// The ones gone by, folded into one place in the table: a tally for each of them, of it and
 	// all before it, of which src/app.html shows the one that ends at the last gone by
@@ -122,7 +154,7 @@
 		return all.map((h, i) => {
 			const last = monthName.format(new Date(`${h.date}T00:00:00Z`));
 			return {
-				id: ids[i]!,
+				id: h.id,
 				date: h.date,
 				next: all[i + 1]?.date,
 				range: first === last ? last : `${first}–${last}`,
@@ -479,13 +511,22 @@
 					<h3>{month.name}</h3>
 					<ol>
 						{#each month.holidays as holiday (holiday.id)}
-							<li class={{ passed: holiday.passed, next: holiday.next }} data-date={holiday.date}>
-								<time datetime={holiday.date}>{holiday.day}</time>
-								<span class="name">{holiday.name}{holiday.tentative ? ' *' : ''}</span>
-								<span class="when"
-									>{holiday.weekday}{#if holiday.next}, {holiday.until}{/if}</span
-								>
-							</li>
+							{#if holiday.school}
+								<!-- Not a day off work, so it's set small, without the day that leads the others.
+								     It's gone, to the style that hides those, once its last day is -->
+								<li class={['school', { passed: holiday.passed }]} data-date={holiday.last}>
+									<span class="name">{holiday.name}</span>
+									<span class="when">{holiday.days}</span>
+								</li>
+							{:else}
+								<li class={{ passed: holiday.passed, next: holiday.next }} data-date={holiday.date}>
+									<time datetime={holiday.date}>{holiday.day}</time>
+									<span class="name">{holiday.name}{holiday.tentative ? ' *' : ''}</span>
+									<span class="when"
+										>{holiday.weekday}{#if holiday.next}, {holiday.until}{/if}</span
+									>
+								</li>
+							{/if}
 						{/each}
 					</ol>
 				</div>
@@ -494,10 +535,6 @@
 
 		<!-- Shown by the same style, once every one of them is gone -->
 		<p class="note over">{m.holidays_over()}</p>
-
-		{#if tentative}
-			<p class="note">{m.tentative_note()}</p>
-		{/if}
 	</section>
 
 	<!-- The request speaks for itself, so it has no heading of its own -->
@@ -513,7 +550,10 @@
 
 	<footer class="foot">
 		<p>
-			{m.sourced_from()}<a href={SOURCE_URL} rel="external">penang.gov.my</a>{m.sourced_end()}
+			{m.sourced_from()}<a href={SOURCE_URL} rel="external">penang.gov.my</a>{m.sourced_and()}<a
+				href={SCHOOL_SOURCE_URL}
+				rel="external">moe.gov.my</a
+			>{m.sourced_end()}
 		</p>
 		<a class="github" href="https://github.com/teemingc/penang-holidays">
 			<svg viewBox="0 0 16 16" aria-hidden="true"
@@ -1004,6 +1044,27 @@
 		@starting-style {
 			opacity: 0;
 		}
+	}
+
+	/* A school holiday, which is no day off work: under the names of the others, small and
+	   quiet, with no day standing before it */
+	li.school {
+		grid-template-areas: '. name' '. when';
+		padding: 0.25rem 0;
+		color: var(--ink-soft);
+	}
+
+	.school .name {
+		font-size: 0.875rem;
+		font-weight: 400;
+	}
+
+	.school .when {
+		font-size: 0.8125rem;
+	}
+
+	li.school.passed {
+		color: var(--ink-faint);
 	}
 
 	.over {

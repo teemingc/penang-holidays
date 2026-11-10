@@ -14,9 +14,22 @@
 			"tentative": false
 		},
 		{
+			"date": "2024-02-09",
+			"name": "Cuti Perayaan Tahun Baru Cina",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2024-02-10",
 			"name": "Tahun Baru Cina",
 			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2024-02-10",
+			"endDate": "2024-03-10",
+			"name": "Cuti Akhir Persekolahan",
+			"type": "school",
 			"tentative": false
 		},
 		{
@@ -32,6 +45,13 @@
 			"tentative": false
 		},
 		{
+			"date": "2024-04-08",
+			"endDate": "2024-04-09",
+			"name": "Cuti Perayaan Hari Raya Aidilfitri",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2024-04-10",
 			"name": "Hari Raya Puasa",
 			"type": "federal",
@@ -44,6 +64,12 @@
 			"tentative": true
 		},
 		{
+			"date": "2024-04-12",
+			"name": "Cuti Perayaan Hari Raya Aidilfitri",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2024-05-01",
 			"name": "Hari Pekerja",
 			"type": "federal",
@@ -53,6 +79,13 @@
 			"date": "2024-05-22",
 			"name": "Hari Wesak",
 			"type": "federal",
+			"tentative": false
+		},
+		{
+			"date": "2024-05-25",
+			"endDate": "2024-06-02",
+			"name": "Cuti Penggal 1",
+			"type": "school",
 			"tentative": false
 		},
 		{
@@ -92,6 +125,13 @@
 			"tentative": false
 		},
 		{
+			"date": "2024-09-14",
+			"endDate": "2024-09-22",
+			"name": "Cuti Penggal 2",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2024-09-16",
 			"name": "Hari Malaysia",
 			"type": "federal",
@@ -104,10 +144,29 @@
 			"tentative": false
 		},
 		{
+			"date": "2024-10-30",
+			"name": "Cuti Perayaan Hari Deepavali",
+			"type": "school",
+			"tentative": false
+		},
+		{
 			"date": "2024-10-31",
 			"name": "Hari Deepavali",
 			"type": "federal",
 			"tentative": true
+		},
+		{
+			"date": "2024-11-01",
+			"name": "Cuti Perayaan Hari Deepavali",
+			"type": "school",
+			"tentative": false
+		},
+		{
+			"date": "2024-12-21",
+			"endDate": "2024-12-29",
+			"name": "Cuti Penggal 3",
+			"type": "school",
+			"tentative": false
 		},
 		{
 			"date": "2024-12-25",

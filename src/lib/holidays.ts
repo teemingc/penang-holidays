@@ -1,9 +1,12 @@
-export type HolidayType = 'federal' | 'state';
+export const HOLIDAY_TYPES = ['federal', 'state', 'school'] as const;
+export type HolidayType = (typeof HOLIDAY_TYPES)[number];
 
 export interface Holiday {
-	/** ISO date, e.g. `2026-02-17` */
+	/** ISO date, e.g. `2026-02-17`; the first day of one that runs longer */
 	date: string;
-	/** Name as published on the portal, in Malay */
+	/** The last day of a holiday that runs longer than a day, as school holidays mostly do */
+	endDate?: string;
+	/** Name as published, in Malay */
 	name: string;
 	type: HolidayType;
 	/** Marked `( * ) Tertakluk kepada perubahan` (subject to change) on the portal */

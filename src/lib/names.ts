@@ -17,6 +17,8 @@ const names = new Map<string, Names>([
 	['Hari Thaipusam', { en: 'Thaipusam', zh: '大宝森节' }],
 	['Hari Nuzul Al-Quran', { en: 'Nuzul Al-Quran Day', zh: '可兰经降世日' }],
 	['Hari Raya Puasa', { en: 'Eid al-Fitr', zh: '开斋节' }],
+	// as the school calendar spells it
+	['Hari Raya Aidilfitri', { en: 'Eid al-Fitr', zh: '开斋节' }],
 	['Hari Raya Puasa (Hari Kedua)', { en: 'Eid al-Fitr (Second Day)', zh: '开斋节第二天' }],
 	['Hari Pekerja', { en: 'Labor Day', zh: '劳动节' }],
 	['Hari Raya Qurban', { en: 'Eid al-Adha', zh: '哈芝节' }],
@@ -44,6 +46,27 @@ const names = new Map<string, Names>([
 	['Hari Krismas', { en: 'Christmas Day', zh: '圣诞节' }]
 ]);
 
+// school holidays, from the ministry's academic calendar; these translations are this project's own
+const school = new Map<string, Names>([
+	['Cuti Pertengahan Tahun', { en: 'Mid-year school holidays', zh: '年中假期' }],
+	['Cuti Akhir Persekolahan', { en: 'Year-end school holidays', zh: '年终假期' }]
+]);
+
+const term: Record<Language, (number: string) => string> = {
+	en: (number) => `Term ${number} school holidays`,
+	zh: (number) => `第${number}学期假期`
+};
+
+const midterm: Record<Language, (number: string) => string> = {
+	en: (number) => `Mid-term ${number} school holidays`,
+	zh: (number) => `第${number}学期期中假期`
+};
+
+const festive: Record<Language, (holiday: string) => string> = {
+	en: (holiday) => `${holiday} school holidays`,
+	zh: (holiday) => `${holiday}学校假期`
+};
+
 const replacement: Record<Language, (holidays: string[]) => string> = {
 	en: (holidays) => `${holidays.join(' and ')} (observed)`,
 	zh: (holidays) => `${holidays.join('及')}补假`
@@ -61,5 +84,20 @@ export function translate(name: string, language: Language): string | undefined 
 		return holidays.every(Boolean) ? replacement[language](holidays as string[]) : undefined;
 	}
 
-	return names.get(name)?.[language];
+	// a break between school terms, like Cuti Penggal 1
+	const number = name.match(/^Cuti Penggal (\d+)$/)?.[1];
+	if (number) return term[language](number);
+
+	// a break in the middle of a term, like Cuti Pertengahan Penggal 1
+	const middle = name.match(/^Cuti Pertengahan Penggal (\d+)$/)?.[1];
+	if (middle) return midterm[language](middle);
+
+	// days off school around a festival, like Cuti Perayaan Hari Deepavali
+	const celebrated = name.match(/^Cuti Perayaan (.+)$/)?.[1];
+	if (celebrated) {
+		const holiday = translate(celebrated, language);
+		return holiday && festive[language](holiday);
+	}
+
+	return (names.get(name) ?? school.get(name))?.[language];
 }
