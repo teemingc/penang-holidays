@@ -69,13 +69,14 @@
 
 	// The sun and moon, on their round of the sky, where they're shown on the scene, from its
 	// top left, in CSS pixels, and how much of each is above the horizon, from 0 to 1
-	let bodies = $state({ sun: { x: 0, y: 0, shown: 0 }, moon: { x: 0, y: 0, shown: 0 } });
+	let bodies = $state.raw({ sun: { x: 0, y: 0, shown: 0 }, moon: { x: 0, y: 0, shown: 0 } });
 	// That round: an ellipse about the middle of the horizon, `line` down the scene
-	let round = $state.raw({ cx: 0, rx: 1, ry: 1, line: 0 });
-	// The time of day the sky shows, and whether it's been picked by moving the sun or moon
+	let round = { cx: 0, rx: 1, ry: 1, line: 0 };
+	// The time of day the sky shows, for a screen reader
 	let minutes = $state(0);
 	let time = $state('');
-	let chosen = $state(false);
+	// The sky lit for the time of day it shows, whenever that's picked; set up with the scene
+	let onTime = () => {};
 	// Which is being dragged
 	let held = $state<'sun' | 'moon' | null>(null);
 	// Moving the sun or moon round the sky moves the time of day, the sun opposite the moon.
@@ -139,7 +140,7 @@
 			ArrowDown: -step,
 			PageDown: -60
 		};
-		if (event.key === 'Escape' && chosen) {
+		if (event.key === 'Escape' && picked()) {
 			event.preventDefault();
 			choose(null);
 		} else if (event.key in by) {
@@ -275,7 +276,6 @@
 				minute: '2-digit',
 				timeZone: 'Asia/Kuala_Lumpur'
 			}).format(now());
-			chosen = picked();
 			const warmth = Math.max(0, 1 - Math.abs(sunNow.elevation) / ((12 * Math.PI) / 180));
 			const low = angle <= Math.PI ? (1 - Math.sin(angle)) ** 2 : 0;
 			// The horizon glows less after dark, and never white: by full night, only a faint
@@ -409,7 +409,7 @@
 		let pace = 0;
 		let sped = 0;
 		let lastMinutes = minutesOf(now());
-		const onTime = () => {
+		onTime = () => {
 			const at = performance.now();
 			const m = minutesOf(now());
 			const by = Math.abs(((m - lastMinutes + 2160) % 1440) - 720);
@@ -417,7 +417,6 @@
 			[lastMinutes, sped] = [m, at];
 			light(held !== null);
 		};
-		addEventListener('skytime', onTime);
 
 		let frame = 0;
 		let previous = performance.now();
@@ -479,7 +478,7 @@
 
 		return () => {
 			cancelAnimationFrame(frame);
-			removeEventListener('skytime', onTime);
+			onTime = () => {};
 			observer.disconnect();
 			sight.disconnect();
 			input.dispose();
@@ -492,6 +491,9 @@
 </script>
 
 <!-- Its label is its own text, shown for a keyboard once it has focus -->
+<!-- The time of day picked, or put back to now -->
+<svelte:window onskytime={() => onTime()} />
+
 <button
 	type="button"
 	class={['scene', { shown }]}

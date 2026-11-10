@@ -10,4 +10,11 @@ declare global {
 	}
 }
 
+declare module 'svelte/elements' {
+	interface SvelteWindowAttributes {
+		/** The time of day the sky shows has been picked, or put back to now: see src/lib/sky.ts */
+		onskytime?: (event: Event) => void;
+	}
+}
+
 export {};

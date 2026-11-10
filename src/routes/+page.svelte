@@ -284,6 +284,9 @@
 		].join(', ');
 	}
 
+	// Kept up with the sky when the sun's moved round it; set up once the page is
+	let onSkytime = () => {};
+
 	// The sky follows the time of day in Penang: set before the first paint by src/app.html,
 	// and kept up to date here, blended across twilight just as the scene's is. The sea around
 	// it deepens with the sky, one solid colour at every edge, and the browser's bars with it
@@ -319,14 +322,16 @@
 		const observer = new ResizeObserver(update);
 		observer.observe(document.body);
 		// and at once, when the sun's moved round the sky to another time of day
-		addEventListener('skytime', update);
+		onSkytime = update;
 		return () => {
 			clearInterval(timer);
 			observer.disconnect();
-			removeEventListener('skytime', update);
+			onSkytime = () => {};
 		};
 	});
 </script>
+
+<svelte:window onskytime={() => onSkytime()} />
 
 <svelte:head>
 	<title>{m.title()}</title>
