@@ -11,16 +11,85 @@ const radians = (degrees: number) => (degrees * Math.PI) / 180;
 export const penangDate = (date: Date) =>
 	date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' });
 
+// A time of day picked by moving the sun across the sky, or 'now' once it's been put back,
+// which overrides a `?time` in the address too; until either, null
+let chosen: Date | 'now' | null = null;
+
 /**
- * Now, or for previewing another time of day, the Penang time in a `?time=21:30` query
+ * Now; or the time of day picked by moving the sun; or for previewing another time of day,
+ * the Penang time in a `?time=21:30` query
  */
 export function now(): Date {
+	if (chosen instanceof Date) return chosen;
 	const time =
-		typeof location === 'undefined' ? null : new URL(location.href).searchParams.get('time');
+		chosen === 'now' || typeof location === 'undefined'
+			? null
+			: new URL(location.href).searchParams.get('time');
 	const match = time?.match(/^(\d{1,2}):(\d{2})$/);
 	if (!match) return new Date();
-	// Today's date in Penang, at that time, in Penang's offset of UTC+8
-	return new Date(`${penangDate(new Date())}T${match[1]!.padStart(2, '0')}:${match[2]}:00+08:00`);
+	return todayAt(Number(match[1]) * 60 + Number(match[2]));
+}
+
+/**
+ * Shows the sky at `date`, or with null, as it is now; and says so, with a `skytime` event on
+ * the window, for everything that follows the sky
+ */
+export function choose(date: Date | null) {
+	chosen = date ?? 'now';
+	dispatchEvent(new Event('skytime'));
+}
+
+/** Whether the sky shows a time of day picked by moving the sun, rather than now */
+export const picked = () => chosen instanceof Date;
+
+/** Today in Penang, `minutes` past midnight there, in Penang's offset of UTC+8 */
+export function todayAt(minutes: number): Date {
+	const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
+	const hh = String(Math.floor(m / 60)).padStart(2, '0');
+	const mm = String(m % 60).padStart(2, '0');
+	return new Date(`${penangDate(new Date())}T${hh}:${mm}:00+08:00`);
+}
+
+/** Minutes past midnight in Penang at `date` */
+export const minutesOf = (date: Date) =>
+	(((date.getUTCHours() + 8) % 24) * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60) % 1440;
+
+// Sunrise and sunset, worked out once a day
+let times: { day: string; rise: number; set: number } | undefined;
+
+/** Sunrise and sunset in Penang today, in minutes past midnight */
+export function sunTimes(): { rise: number; set: number } {
+	const day = penangDate(new Date());
+	if (times?.day !== day) {
+		let [rise, set] = [6 * 60, 18 * 60];
+		let before = sunAt(todayAt(0)).elevation;
+		for (let m = 1; m < 1440; m++) {
+			const after = sunAt(todayAt(m)).elevation;
+			if (before <= 0 && after > 0) rise = m;
+			if (before > 0 && after <= 0) set = m;
+			before = after;
+		}
+		times = { day, rise, set };
+	}
+	return times;
+}
+
+/**
+ * Where the sun is around its round of the sky at `minutes` past midnight: from 0, rising, to
+ * π, setting, over the day, and on round through the night to 2π, rising again
+ */
+export function arcAt(minutes: number, { rise, set } = sunTimes()): number {
+	const day = set - rise;
+	const into = (((minutes - rise) % 1440) + 1440) % 1440;
+	return into <= day ? (into / day) * Math.PI : Math.PI + ((into - day) / (1440 - day)) * Math.PI;
+}
+
+/** The time, in minutes past midnight, that the sun is `angle` around its round of the sky */
+export function minutesAt(angle: number, { rise, set } = sunTimes()): number {
+	const a = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+	const day = set - rise;
+	const into = a <= Math.PI ? (a / Math.PI) * day : day + ((a - Math.PI) / Math.PI) * (1440 - day);
+	return (rise + into) % 1440;
 }
 
 /** The year it is in Penang at a given moment, or the latest available when it isn't one yet */
@@ -74,8 +143,9 @@ export function phaseOf(sun: Sun): Phase {
 type Rgb = [number, number, number];
 
 export interface Palette {
-	/** The sky overhead, and at the horizon */
+	/** The sky overhead, the band of colour between, and at the horizon */
 	top: Rgb;
+	mid: Rgb;
 	horizon: Rgb;
 	/** The sea's own colour, before it reflects anything */
 	sea: Rgb;
@@ -91,6 +161,7 @@ export interface Palette {
 export const PALETTES: Record<Phase, Palette> = {
 	night: {
 		top: [5, 8, 20],
+		mid: [12, 18, 44],
 		horizon: [22, 32, 66],
 		sea: [3, 8, 20],
 		light: [150, 170, 220],
@@ -100,7 +171,9 @@ export const PALETTES: Record<Phase, Palette> = {
 	},
 	dawn: {
 		top: [52, 66, 128],
-		horizon: [246, 172, 150],
+		// Rose, then peach and gold low down where the sun is coming up
+		mid: [178, 120, 166],
+		horizon: [252, 186, 138],
 		sea: [20, 40, 70],
 		light: [255, 190, 150],
 		strength: 1.2,
@@ -109,6 +182,7 @@ export const PALETTES: Record<Phase, Palette> = {
 	},
 	day: {
 		top: [92, 160, 226],
+		mid: [150, 198, 240],
 		horizon: [206, 230, 246],
 		sea: [14, 96, 150],
 		light: [255, 250, 238],
@@ -118,7 +192,9 @@ export const PALETTES: Record<Phase, Palette> = {
 	},
 	dusk: {
 		top: [38, 40, 98],
-		horizon: [244, 140, 82],
+		// Through the haze over the strait: violet and magenta, then deep orange at the horizon
+		mid: [172, 82, 138],
+		horizon: [252, 148, 66],
 		sea: [24, 30, 60],
 		light: [255, 150, 90],
 		strength: 1.1,
@@ -147,6 +223,7 @@ export function paletteAt(sun: Sun): Palette {
 					: [PALETTES.day, PALETTES.day, 0];
 	return {
 		top: mix(from.top, to.top, t),
+		mid: mix(from.mid, to.mid, t),
 		horizon: mix(from.horizon, to.horizon, t),
 		sea: mix(from.sea, to.sea, t),
 		light: mix(from.light, to.light, t),
@@ -154,6 +231,16 @@ export function paletteAt(sun: Sun): Palette {
 		ambient: mix(from.ambient, to.ambient, t),
 		lamps: from.lamps + (to.lamps - from.lamps) * t
 	};
+}
+
+/**
+ * The water below the horizon, seen from above, on down the page under the type: the sea's
+ * own colour with a little of the sky in it, and by day, with the sun up, mostly the pale sky
+ * it reflects, so it's never the middling blue that neither light nor dark type can be read on
+ */
+export function waterOf(palette: Palette, elevation: number): Rgb {
+	const day = smoothstep(radians(2), radians(10), elevation);
+	return mix(mix(palette.sea, palette.mid, 0.3), palette.horizon, 0.65 * day);
 }
 
 // at dawn and dusk the low sky is too light for light type and too dark for dark
@@ -167,12 +254,13 @@ const smoothstep = (from: number, to: number, x: number) => {
 
 /**
  * The page sky for where the sun is, shaded around twilight: more and more as the sun nears
- * it, and gone by the time the type turns dark for the day, at 10°, so the sky never jumps
+ * it, and gone by the time the sun is 6° up, in the gold of the hour before sunset, so the
+ * sky never jumps
  */
 export function shade(colour: Rgb, sun: Sun): Rgb {
 	const e = sun.elevation;
 	const twilight =
-		smoothstep(radians(-10), radians(-6), e) * (1 - smoothstep(radians(6), radians(10), e));
+		smoothstep(radians(-10), radians(-6), e) * (1 - smoothstep(radians(2), radians(6), e));
 	return mix(colour, EVENING, 0.68 * twilight);
 }
 
@@ -209,25 +297,35 @@ export interface Inks {
  * twilight, when the sky is neither light nor dark, they're all as strong as the ink itself
  */
 export function inksFor(top: Rgb): Inks {
+	return inksAcross([top]);
+}
+
+/**
+ * The type for a stretch of sky that runs through each of `skies`, legible against all of
+ * them, as `inksFor` is against the one
+ */
+export function inksAcross(skies: Rgb[]): Inks {
+	const least = (colour: Rgb) => Math.min(...skies.map((sky) => contrast(colour, sky)));
 	const light: Rgb = [244, 248, 251];
 	const darkInk: Rgb = [6, 20, 42];
-	const dark = contrast(darkInk, top) > contrast(light, top);
+	const dark = least(darkInk) > least(light);
 	// When the sky is halfway between, only pure black or white stands out enough
 	let ink = dark ? darkInk : light;
 	const purest: Rgb = dark ? [0, 0, 0] : [255, 255, 255];
-	for (let i = 0; i < 10 && contrast(ink, top) < LEGIBLE; i++) ink = mix(ink, purest, 0.25);
+	for (let i = 0; i < 10 && least(ink) < LEGIBLE; i++) ink = mix(ink, purest, 0.25);
 	// `colour` blended into the sky by `strength`, strengthened until it can be read
+	const behind = skies[0]!;
 	const legible = (colour: Rgb, strength: number) => {
 		for (let s = strength; s < 1; s += 0.02) {
-			const blended = mix(top, colour, s);
-			if (contrast(blended, top) >= LEGIBLE) return blended;
+			const blended = mix(behind, colour, s);
+			if (least(blended) >= LEGIBLE) return blended;
 		}
 		return colour;
 	};
 	// The accent, deepened towards the ink until it can be read
 	let accent: Rgb = dark ? [6, 63, 115] : [246, 207, 79];
-	for (let i = 0; i < 30 && contrast(accent, top) < LEGIBLE; i++) accent = mix(accent, ink, 0.1);
-	if (contrast(accent, top) < LEGIBLE) accent = ink;
+	for (let i = 0; i < 30 && least(accent) < LEGIBLE; i++) accent = mix(accent, ink, 0.1);
+	if (least(accent) < LEGIBLE) accent = ink;
 	return { dark, ink, soft: legible(ink, 0.74), faint: legible(ink, 0.54), accent };
 }
 

@@ -1,14 +1,27 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import * as THREE from 'three';
 	import { m } from './paraglide/messages.js';
-	import { now, paletteAt, shade, sunAt } from './sky.js';
+	import {
+		arcAt,
+		choose,
+		minutesAt,
+		minutesOf,
+		now,
+		paletteAt,
+		picked,
+		shade,
+		sunAt,
+		todayAt,
+		waterOf
+	} from './sky.js';
 	import { createBridge } from './scene/bridge.js';
 	import { createEffects } from './scene/effects.js';
 	import { createFlag } from './scene/flag.js';
 	import { createHeavens } from './scene/heavens.js';
 	import { createInput } from './scene/input.js';
-	import { SKY_LAYER, createMask, createMist } from './scene/mist.js';
+	import { SKY_LAYER, createMist } from './scene/mist.js';
 	import { createSea } from './scene/sea.js';
 	import { createSmoke } from './scene/smoke.js';
 	import { createTraffic } from './scene/traffic.js';
@@ -22,9 +35,14 @@
 		pane?: HTMLElement;
 		/** Called once the scene has drawn its first frame */
 		onready?: () => void;
+		/**
+		 * Called whenever the sky changes, with the colour of the sky, from 0 to 255, `y` CSS
+		 * pixels down the page, for the type over it
+		 */
+		onsky?: (colourAt: (y: number) => number[]) => void;
 	}
 
-	let { reducedMotion, header, pane, onready }: Props = $props();
+	let { reducedMotion, header, pane, onready, onsky }: Props = $props();
 
 	// The canvases are hidden until the first frame is on them, and then fade in as the still
 	// fades out: some browsers paint a canvas white for a moment before anything is drawn to it
@@ -49,8 +67,94 @@
 		throwOne();
 	}
 
+	// The sun and moon, on their round of the sky, where they're shown on the scene, from its
+	// top left, in CSS pixels, and how much of each is above the horizon, from 0 to 1
+	let bodies = $state({ sun: { x: 0, y: 0, shown: 0 }, moon: { x: 0, y: 0, shown: 0 } });
+	// That round: an ellipse about the middle of the horizon, `line` down the scene
+	let round = $state.raw({ cx: 0, rx: 1, ry: 1, line: 0 });
+	// The time of day the sky shows, and whether it's been picked by moving the sun or moon
+	let minutes = $state(0);
+	let time = $state('');
+	let chosen = $state(false);
+	// Which is being dragged
+	let held = $state<'sun' | 'moon' | null>(null);
+	// Moving the sun or moon round the sky moves the time of day, the sun opposite the moon.
+	// Where it's held, around the round, carried on from where it was rather than wrapping; left
+	// be when the pointer's near the middle, where the smallest move would swing it right round;
+	// and swung at most so far a frame, so a pointer across the middle takes it smoothly round
+	// rather than flicking it to the other side of the sky
+	let angle = 0;
+	function aim(body: 'sun' | 'moon', event: PointerEvent) {
+		const box = host.getBoundingClientRect();
+		const x = (round.cx - (event.clientX - box.left)) / round.rx;
+		const y = (round.line - (event.clientY - box.top)) / round.ry;
+		if (Math.hypot(x, y) < 0.25) return;
+		let to = Math.atan2(y, x);
+		while (to - angle > Math.PI) to -= Math.PI * 2;
+		while (to - angle < -Math.PI) to += Math.PI * 2;
+		angle += Math.max(-0.3, Math.min(0.3, to - angle));
+		choose(todayAt(minutesAt(angle - (body === 'moon' ? Math.PI : 0))));
+	}
+	// Aimed once a frame, however often the pointer moves, at where it last was
+	let aiming = 0;
+	let latest: PointerEvent | null = null;
+	function grab(body: 'sun' | 'moon', event: PointerEvent) {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		(event.currentTarget as Element).setPointerCapture(event.pointerId);
+		held = body;
+		angle = arcAt(minutesOf(now())) + (body === 'moon' ? Math.PI : 0);
+		// The page's colours follow the sky at once, not over the seconds they take to turn
+		// with the time of day
+		document.documentElement.dataset.scrubbing = '';
+		aim(body, event);
+	}
+	function drag(event: PointerEvent) {
+		if (!held) return;
+		latest = event;
+		aiming ||= requestAnimationFrame(() => {
+			aiming = 0;
+			if (held && latest) aim(held, latest);
+		});
+	}
+	function letGo() {
+		if (!held) return;
+		cancelAnimationFrame(aiming);
+		aiming = 0;
+		held = null;
+		delete document.documentElement.dataset.scrubbing;
+		// Lit again in full, the bridge's shadow on the sea worked out again and the page's type
+		// set for the sky, once the frame that lets go is drawn
+		const later = window.requestIdleCallback ?? ((then: () => void) => setTimeout(then, 50));
+		later(() => dispatchEvent(new Event('skytime')));
+	}
+	// A quarter of an hour at a time from the keyboard, an hour with shift; Escape for now
+	function nudge(event: KeyboardEvent) {
+		const step = event.shiftKey ? 60 : 15;
+		const by: Record<string, number> = {
+			ArrowRight: step,
+			ArrowUp: step,
+			PageUp: 60,
+			ArrowLeft: -step,
+			ArrowDown: -step,
+			PageDown: -60
+		};
+		if (event.key === 'Escape' && chosen) {
+			event.preventDefault();
+			choose(null);
+		} else if (event.key in by) {
+			event.preventDefault();
+			choose(todayAt(Math.round(minutesOf(now()) / 15) * 15 + by[event.key]!));
+		}
+	}
+
 	const color = (rgb: number[]) =>
 		new THREE.Color().setRGB(rgb[0]! / 255, rgb[1]! / 255, rgb[2]! / 255, THREE.SRGBColorSpace);
+
+	// Lit afresh after a navigation, which can change the time of day being previewed, so the
+	// scene's sky never disagrees with the page's
+	let relight = () => {};
+	afterNavigate(() => relight());
 
 	// The Penang Bridge across the strait, at the time of day it is in Penang: see ./scene/
 	onMount(() => {
@@ -81,6 +185,11 @@
 		// the first, extended upwards; everything else works in the first camera's view
 		const tall = new THREE.PerspectiveCamera();
 		let above = 0;
+		// The sky's canvas, and the sea drawn into it, reach further still, out to the sides of
+		// the window, so their mist can thin out right at the edges of the screen, past the
+		// page's margins
+		const wide = new THREE.PerspectiveCamera();
+		const broad = new THREE.PerspectiveCamera();
 
 		// The light for the time of day in Penang, from the sun, or by night from the moon
 		let palette = paletteAt(sunAt(now()));
@@ -93,10 +202,10 @@
 		for (const child of scene.children) {
 			if (!before.has(child)) child.traverse((object) => object.layers.set(SKY_LAYER));
 		}
-		const mist = createMist(heaven, scene, tall, ocean);
-		// And the bridge thins out into the same mist, but for the header above it
-		const mask = createMask(renderer);
-		const sea = createSea(ocean, camera, bridge.lampHeads);
+		// Only the sky and the sea mist out: the bridge already fades into the distance by
+		// the scene's fog, and misting it too hid it on wide screens
+		const mist = createMist(heaven, scene, wide, ocean);
+		const sea = createSea(ocean, broad, bridge.lampHeads);
 		const effects = createEffects(scene, bridge.glow);
 		const cloth = header?.querySelector<HTMLElement>('.flag');
 		const flag = cloth ? createFlag(cloth, reduced) : null;
@@ -118,8 +227,71 @@
 		handle = input;
 		throwOne = input.throwOne;
 
-		function light() {
+		// The sun on its round of the sky, at the time of day the sky shows: an ellipse about the
+		// middle of the horizon, its top half the day, rising at its left and setting at its
+		// right, and its bottom half the night, behind the horizon, with the moon opposite. Not
+		// where the sun really is, often behind the camera, but where it can be seen and moved.
+		// The sky is warmest around it, with a path of gold across the water when it's low
+		let sunNow = sunAt(now());
+		let across = 1;
+		let left = 0;
+		let deep = 1;
+		let line = 0;
+		const RADIUS = 24;
+		function placeSun() {
+			const { clientWidth: w } = host;
+			round = {
+				cx: w / 2,
+				rx: Math.min(w * 0.42, 560),
+				// rising as high as it can without going behind the title and the languages
+				ry: Math.max(
+					48,
+					line -
+						((header?.getBoundingClientRect().bottom ?? 0) - host.getBoundingClientRect().top) -
+						RADIUS -
+						12
+				),
+				line
+			};
+			const angle = arcAt(minutesOf(now()));
+			const at = (a: number) => {
+				const x = round.cx - round.rx * Math.cos(a);
+				const y = line - round.ry * Math.sin(a);
+				// Going down behind the horizon
+				const t = Math.min(1, Math.max(0, (line - y + RADIUS) / (RADIUS * 1.6)));
+				return { x, y, shown: t * t * (3 - 2 * t) };
+			};
+			const [sun, moon] = [at(angle), at(angle + Math.PI)];
+			const towards = ({ x, y }: { x: number; y: number }) =>
+				new THREE.Vector3(((x + left) / across) * 2 - 1, 1 - ((y + above) / deep) * 2, 0.5)
+					.unproject(wide)
+					.sub(wide.position)
+					.normalize();
+			heavens.place(towards(sun), sun.shown, towards(moon), moon.shown);
+			bodies = { sun, moon };
+			minutes = Math.round(minutesOf(now()));
+			time = new Intl.DateTimeFormat(document.documentElement.lang || 'en', {
+				hour: 'numeric',
+				minute: '2-digit',
+				timeZone: 'Asia/Kuala_Lumpur'
+			}).format(now());
+			chosen = picked();
+			const warmth = Math.max(0, 1 - Math.abs(sunNow.elevation) / ((12 * Math.PI) / 180));
+			const low = angle <= Math.PI ? (1 - Math.sin(angle)) ** 2 : 0;
+			// The horizon glows less after dark, and never white: by full night, only a faint
+			// haze low over the strait
+			const dark = Math.min(1, Math.max(0, -sunNow.elevation / ((8 * Math.PI) / 180)));
+			mist.sun((sun.x + left) / across, warmth, sun.shown * low, 1 - 0.8 * dark);
+			// down the page, from the top of the sky's canvas, measured the once
+			const top = heaven.getBoundingClientRect().top + scrollY;
+			onsky?.((y) => mist.colourAt(y - top));
+		}
+
+		// Lit for the time of day the sky shows; `quick`, while the sun's being dragged, without
+		// working out the bridge's shadow on the sea again
+		function light(quick = false) {
 			const sun = sunAt(now());
+			sunNow = sun;
 			palette = paletteAt(sun);
 			heavens.light(sun, palette);
 			const night = sun.elevation < 0;
@@ -130,32 +302,53 @@
 				Math.sin(elevation),
 				-Math.cos(azimuth) * Math.cos(elevation)
 			);
+			// Through twilight, with the sun low and the horizon glowing behind it, the bridge is a
+			// silhouette against the sky: less lit by the sun, in the cool light of the sky overhead
+			// rather than the warm light of the horizon, the nearer the sun is to it
+			const twilight = Math.max(0, 1 - Math.abs(sun.elevation) / ((12 * Math.PI) / 180));
+			const overhead = shade(palette.top, sun);
 			sunLight.position.copy(direction).multiplyScalar(2000);
 			sunLight.color = color(palette.light);
-			sunLight.intensity = palette.strength;
-			skyLight.color = color(palette.ambient);
+			sunLight.intensity = palette.strength * (1 - 0.6 * twilight);
+			skyLight.color = color(
+				palette.ambient.map((c, i) => c + (overhead[i]! - c) * 0.7 * twilight)
+			);
 			skyLight.groundColor = color(palette.sea);
 			skyLight.intensity = 0.4 + palette.strength * 0.25;
 
 			(scene.fog as THREE.Fog).color = color(palette.horizon);
 			// The sea takes the page's accent, which src/routes/+page.svelte sets for the time of
 			// day, and only the sun casts a shadow worth seeing on it
-			sea.light(
-				direction,
-				night ? 0 : Math.min(1, palette.strength / 1.2),
-				getComputedStyle(host).getPropertyValue('--accent').trim()
-			);
+			if (!quick)
+				sea.light(
+					direction,
+					night ? 0 : Math.min(1, palette.strength / 1.2),
+					getComputedStyle(host).getPropertyValue('--accent').trim()
+				);
 
 			// The bridge's lights come on as the sky darkens
 			bridge.light(palette.lamps);
 			traffic.light(palette.lamps);
-			renderer.toneMappingExposure = night ? 1.1 : 0.9;
+			traffic.at(minutesOf(now()));
+			const exposure = night ? 1.1 : 0.9;
+			renderer.toneMappingExposure = exposure * (1 - 0.3 * twilight);
+			// The top is the page's own, shaded through twilight as it is, so the mist melts into
+			// it; the rest is the scene's own, in all its colour, as the type is set for it
 			mist.light(
-				shade(palette.top, sun),
-				shade(palette.horizon, sun),
-				renderer.toneMappingExposure
+				{
+					top: overhead,
+					mid: palette.mid,
+					horizon: palette.horizon,
+					sea: waterOf(palette, sun.elevation)
+				},
+				exposure
 			);
+			placeSun();
 		}
+
+		// Drawn once more after a resize, which clears the canvases, if they aren't being drawn
+		// anyway: the sky's reaches down the whole page, so it's in sight with the bridge long gone
+		let repaint = () => {};
 
 		function resize() {
 			const { clientWidth: w, clientHeight: h } = host;
@@ -165,32 +358,79 @@
 			renderer.setSize(w, h + above);
 			canvas.style.top = `${-above}px`;
 			heaven.style.top = `${-above}px`;
+			const box = host.getBoundingClientRect();
+			left = box.left;
+			across = document.documentElement.clientWidth;
+			heaven.style.left = `${-left}px`;
 			camera.aspect = w / h;
 			// Narrow screens step back, to keep both pylons in view
 			camera.fov = w / h < 1 ? 46 : 30;
 			camera.updateProjectionMatrix();
 			// Never rendered itself, so its place in the world is kept up to date here
 			camera.updateMatrixWorld();
-			sea.resize(w, h, Math.min(2, window.devicePixelRatio));
 			tall.copy(camera);
 			tall.setViewOffset(w, h, 0, -above, w, h + above);
-			mist.resize(w, h + above, h, Math.min(2, window.devicePixelRatio));
-			mask.resize(w, h + above, above / (h + above));
+			broad.copy(camera);
+			broad.setViewOffset(w, h, -left, 0, across, h);
+			sea.resize(across, h, Math.min(2, window.devicePixelRatio), left);
+			// And down to the foot of the page, its horizon's colour running on behind everything
+			// below the bridge. Measured to the body, which the canvas itself doesn't stretch
+			const under = Math.max(0, document.body.getBoundingClientRect().bottom - box.bottom);
+			deep = h + above + under;
+			wide.copy(camera);
+			wide.setViewOffset(w, h, -left, -above, across, deep);
+			// Kept within what any browser will draw a canvas as tall as
+			const ratio = Math.min(2, window.devicePixelRatio, 8192 / deep);
+			// Where the sea meets the sky: a point on the water far off in the direction the camera
+			// looks, on screen
+			const ahead = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+			const far = camera.position.clone().addScaledVector(ahead, 15000).setY(0).project(camera);
+			line = ((1 - far.y) / 2) * h;
+			mist.resize(across, deep, above, h, ratio, above + line);
+			placeSun();
 			smoke?.measure();
+			repaint();
 		}
 		const observer = new ResizeObserver(resize);
 		observer.observe(host);
 		observer.observe(header ?? host);
 		if (pane) observer.observe(pane);
+		// The window, which the sky's canvas spans, can widen without the page past its widest
+		observer.observe(document.documentElement);
+		// And the page can grow longer, holidays gone by shown, without the scene changing
+		observer.observe(document.body);
 		document.fonts?.ready.then(resize);
 		resize();
 		light();
+		relight = light;
+		// The time of day picked, or put back to now: lit at once, quickly while it's dragged,
+		// and how fast it's going by, in minutes a second, for the traffic
+		let lapse = 1;
+		let pace = 0;
+		let sped = 0;
+		let lastMinutes = minutesOf(now());
+		const onTime = () => {
+			const at = performance.now();
+			const m = minutesOf(now());
+			const by = Math.abs(((m - lastMinutes + 2160) % 1440) - 720);
+			if (held && at > sped) pace = (by * 1000) / Math.max(16, at - sped);
+			[lastMinutes, sped] = [m, at];
+			light(held !== null);
+		};
+		addEventListener('skytime', onTime);
 
 		let frame = 0;
 		let previous = performance.now();
 		let lit = previous;
 		let clock = 0;
 		let drawn = false;
+		let drift = 0;
+		let looping = true;
+		function paint() {
+			sea.draw(clock, palette.lamps);
+			mist.draw(drift);
+			renderer.render(scene, tall);
+		}
 		function loop(now: number) {
 			frame = requestAnimationFrame(loop);
 			const dt = Math.min(0.1, (now - previous) / 1000);
@@ -201,19 +441,20 @@
 			}
 
 			// With reduced motion the traffic holds still, but the motorcycles never stop
-			if (!reducedMotion) clock += dt;
-			traffic.update(clock, reducedMotion ? 0 : dt * 9);
+			// Sped up, like a time lapse, while the sun's dragged round the sky: as fast as the
+			// time of day's going by, up to sixteen times, and easing back once it stops
+			const hurry = held && now - sped < 150 ? 1 + Math.min(15, pace / 6) : 1;
+			lapse += (hurry - lapse) * (1 - Math.exp(-dt * 6));
+			if (!reducedMotion) clock += dt * lapse;
+			traffic.update(clock, reducedMotion ? 0 : dt * 9 * lapse);
 			effects.update(dt);
 			vehicles.update(dt, now / 1000);
 			smoke?.settle(dt);
 			flag?.flutter(dt);
 			bridge.update(clock, palette.lamps, vehicles.sinceGoal(), reducedMotion);
 			if (!reducedMotion) heavens.twinkle();
-			const drift = reducedMotion ? 0 : now / 1000;
-			sea.draw(clock, palette.lamps);
-			mist.draw(drift);
-			renderer.render(scene, tall);
-			mask.apply(drift);
+			drift = reducedMotion ? 0 : now / 1000;
+			paint();
 			if (!drawn) {
 				drawn = true;
 				shown = true;
@@ -226,20 +467,24 @@
 		// battery; it picks up where it left off, without a jump, when they're back
 		const sight = new IntersectionObserver(([entry]) => {
 			cancelAnimationFrame(frame);
-			if (!entry?.isIntersecting) return;
+			looping = !!entry?.isIntersecting;
+			if (!looping) return;
 			previous = performance.now();
 			frame = requestAnimationFrame(loop);
 		});
 		sight.observe(pane ?? host);
+		repaint = () => {
+			if (!looping) requestAnimationFrame(paint);
+		};
 
 		return () => {
 			cancelAnimationFrame(frame);
+			removeEventListener('skytime', onTime);
 			observer.disconnect();
 			sight.disconnect();
 			input.dispose();
 			renderer.dispose();
 			mist.dispose();
-			mask.dispose();
 			flag?.dispose();
 			smoke?.dispose();
 		};
@@ -262,6 +507,31 @@
 	<canvas class="bridge" bind:this={canvas}></canvas>
 	<span class="label">{m.throw_car()}</span>
 </button>
+
+<!-- The sun and the moon, each moved round the sky to move the time of day, by pointer or
+     with the arrow keys, and Escape for now -->
+{#if shown}
+	{#each ['sun', 'moon'] as const as body (body)}
+		{@const at = bodies[body]}
+		<div
+			class={['body', { up: at.shown > 0.3, held: held === body }]}
+			role="slider"
+			tabindex={at.shown > 0.3 ? 0 : -1}
+			aria-label={body === 'sun' ? m.sky_sun() : m.sky_moon()}
+			aria-valuemin={0}
+			aria-valuemax={1439}
+			aria-valuenow={minutes}
+			aria-valuetext={time}
+			style:left="{at.x}px"
+			style:top="{at.y}px"
+			onpointerdown={(event) => grab(body, event)}
+			onpointermove={drag}
+			onpointerup={letGo}
+			onpointercancel={letGo}
+			onkeydown={nudge}
+		></div>
+	{/each}
+{/if}
 
 <style>
 	.scene {
@@ -308,6 +578,33 @@
 		}
 	}
 
+	/* Over the sun and the moon, to take hold of them by; only there while they're up */
+	.body {
+		position: absolute;
+		/* in front of the title, which it can rise behind */
+		z-index: 2;
+		width: 3.5rem;
+		height: 3.5rem;
+		border-radius: var(--round);
+		translate: -50% -50%;
+		cursor: grab;
+		touch-action: none;
+		visibility: hidden;
+	}
+
+	.body.up {
+		visibility: visible;
+	}
+
+	.body.held {
+		cursor: grabbing;
+	}
+
+	.body:focus-visible {
+		outline: 2px solid currentColor;
+		outline-offset: 2px;
+	}
+
 	/* Out of sight until the scene has keyboard focus, then along its foot */
 	.label {
 		position: absolute;
@@ -337,6 +634,16 @@
 	   the flag, which isn't lifted like the words are, its mist dimmed it */
 	.scene .heaven {
 		z-index: -1;
+	}
+
+	/* The bridge isn't misted, which hid it on wide screens: it fades into the distance by the
+	   scene's fog, and only where it runs off the canvas, at the sides and the foot, is it
+	   eased out, so it has no hard edge */
+	.scene .bridge {
+		mask-image:
+			linear-gradient(to right, transparent, #000 6%, #000 94%, transparent),
+			linear-gradient(to top, transparent, #000 12%);
+		mask-composite: intersect;
 	}
 
 	/* Never shown itself: it's drawn into the sky's canvas, into the mist */

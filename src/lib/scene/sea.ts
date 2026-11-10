@@ -27,6 +27,8 @@ export function createSea(ocean: HTMLCanvasElement, camera: THREE.Camera, lampHe
 	const ndc = new THREE.Vector2();
 	const projected = new THREE.Vector3();
 	let width = 0;
+	// How far the sea's canvas reaches out past the scene's left, to the window's
+	let left = 0;
 	let height = 0;
 	let ink = '#fff';
 	// The ripples' pixels, as near the weight of the type's strokes as whole screen pixels allow
@@ -143,9 +145,13 @@ export function createSea(ocean: HTMLCanvasElement, camera: THREE.Camera, lampHe
 	}
 
 	return {
-		/** Sized to the scene, w by h CSS pixels, once the camera has been */
-		resize(w: number, h: number, ratio: number) {
+		/**
+		 * Sized to w by h CSS pixels, once the camera has been, reaching `out` of them past the
+		 * scene's left
+		 */
+		resize(w: number, h: number, ratio: number, out = 0) {
 			width = w;
+			left = out;
 			height = h;
 			ocean.width = w * ratio;
 			ocean.height = h * ratio;
@@ -179,7 +185,7 @@ export function createSea(ocean: HTMLCanvasElement, camera: THREE.Camera, lampHe
 
 		/** A glint at (x, y) on screen, where something vanished into the sky */
 		twinkle(x: number, y: number, at: number) {
-			twinkles.push({ x, y, at });
+			twinkles.push({ x: x + left, y, at });
 		},
 
 		/** The sea at t, its lamps' reflections as bright as `lamps` */

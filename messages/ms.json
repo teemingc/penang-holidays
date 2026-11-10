@@ -28,5 +28,7 @@
 	"source_on_github": "Kod sumber di GitHub",
 	"throw_car": "Seret kereta dari jambatan, atau tekan Enter untuk melontar satu",
 	"holiday_one": "1 cuti umum",
-	"holidays_count": "{count} cuti umum"
+	"holidays_count": "{count} cuti umum",
+	"sky_sun": "Matahari: seret di langit untuk menukar waktu",
+	"sky_moon": "Bulan: seret di langit untuk menukar waktu"
 }

@@ -28,5 +28,7 @@
 	"source_on_github": "Source on GitHub",
 	"throw_car": "Drag a car off the bridge, or press Enter to throw one",
 	"holiday_one": "1 holiday",
-	"holidays_count": "{count} holidays"
+	"holidays_count": "{count} holidays",
+	"sky_sun": "The sun: drag it round the sky to change the time of day",
+	"sky_moon": "The moon: drag it round the sky to change the time of day"
 }

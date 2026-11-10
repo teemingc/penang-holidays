@@ -71,13 +71,20 @@ function driver(n: number): Driver {
 }
 
 // Stop, lurch on a few metres, stop: each lane in its own rhythm, the lurch reaching the
-// cars further back a moment later
+// cars further back a moment later. Just the stop and go, about the jam's steady creep of
+// four metres every five seconds, which is counted up as it goes
+const CREEP = 4 / 5;
 function lurch(t: number) {
 	const cycle = t / 5;
 	const f = cycle - Math.floor(cycle);
 	const go = f < 0.3 ? (1 - Math.cos((f / 0.3) * Math.PI)) / 2 : 1;
-	return (Math.floor(cycle) + go) * 4;
+	return (Math.floor(cycle) + go) * 4 - t * CREEP;
 }
+
+// Out of a jam, the traffic flows at about the bridge's limit of 80 km/h: quicker by the
+// median, slower by the edge
+const FLOW = 22;
+const laneSpeed = (l: number) => FLOW * (1.2 - Math.abs(LANES[l]!.z) / 18);
 
 /**
  * The jam, car by car. Each lane is a queue, front to back. A car's place in it, its slot, says
@@ -86,7 +93,7 @@ function lurch(t: number) {
  * back of the shortest lane their way, coming in from the near end, as do the ones that were
  * thrown off once they're gone
  */
-export function createJam(taken: ReadonlySet<number>) {
+export function createJam(taken: ReadonlySet<number>, parked: ReadonlySet<number>) {
 	const drivers = Array.from({ length: CARS }, (_, n) => driver(n));
 	// A little irregularity, so the queue doesn't look drawn with a ruler
 	const jitter = Array.from({ length: CARS }, (_, i) => Math.sin(i * 12.9898) * 1.2);
@@ -108,15 +115,26 @@ export function createJam(taken: ReadonlySet<number>) {
 	const front = LANES.map(
 		(lane, l) => (lane.way > 0 ? (PER_LANE - 1) * CAR_GAP - SPAN : 0) + l * 2.3
 	);
+	// How far each lane has come; how far apart the cars are, further the fewer there are; and
+	// how much of a jam it is, from 1, stop and go, to 0, flowing, each eased towards where the
+	// time of day would have them
+	const progress = new Float64Array(LANES.length);
+	let gap = CAR_GAP;
+	let jammed = 1;
+	let busy = 1;
 	const placed = (n: number, l: number, t: number) =>
-		front[l]! - slot[n]! * CAR_GAP + jitter[n]! + lurch(t + l * 1.7 - slot[n]! * 0.12);
+		front[l]! +
+		progress[l]! -
+		slot[n]! * gap +
+		jitter[n]! +
+		jammed * lurch(t + l * 1.7 - slot[n]! * 0.12);
 	queues.forEach((lane, l) =>
 		lane.forEach((n, q) => {
 			slot[n] = q;
 			travelled[n] = placed(n, l, 0);
 		})
 	);
-	let jammed = 0;
+	let last = 0;
 
 	// The shortest lane going the same way as lane l
 	function shortest(l: number) {
@@ -183,27 +201,38 @@ export function createJam(taken: ReadonlySet<number>) {
 	}
 
 	function update(t: number) {
-		const dt = Math.max(0, t - jammed);
-		jammed = t;
+		const dt = Math.max(0, t - last);
+		last = t;
+		// Eased towards how busy the bridge is, over half a minute or so
+		const ease = 1 - Math.exp(-dt / 8);
+		gap += (CAR_GAP / Math.max(busy, 0.08) - gap) * ease;
+		const jam = Math.min(1, Math.max(0, (busy - 0.55) / 0.3));
+		jammed += (jam * jam * (3 - 2 * jam) - jammed) * ease;
+		LANES.forEach((_, l) => {
+			progress[l]! += dt * (jammed * CREEP + (1 - jammed) * laneSpeed(l));
+		});
 		queues.forEach((lane, l) => {
-			// Out of the queue when picked up, everyone behind moving up a slot
+			// Out of the queue when picked up, or off the road at this time of day, everyone
+			// behind moving up a slot
 			for (let q = lane.length - 1; q >= 0; q--) {
 				const n = lane[q]!;
-				if (!taken.has(n)) continue;
+				if (!taken.has(n) && !parked.has(n)) continue;
 				lane.splice(q, 1);
 				queued[n] = 0;
 				renumber(lane, q);
 			}
 			// Past the far end, round to the back of the shortest lane, from the near end
+			// leaving everyone else where they were: they move up as the lane goes on
 			while (lane.length && travelled[lane[0]!]! >= SPAN) {
 				const n = lane.shift()!;
 				renumber(lane, 0);
+				progress[l]! -= gap;
 				travelled[n]! -= SPAN;
 				rejoin(n, shortest(l), t);
 			}
 		});
 		for (let n = 0; n < CARS; n++) {
-			if (!queued[n] && !taken.has(n)) {
+			if (!queued[n] && !taken.has(n) && !parked.has(n)) {
 				travelled[n] = 0;
 				rejoin(n, shortest(Math.floor(n / PER_LANE)), t);
 			}
@@ -274,6 +303,10 @@ export function createJam(taken: ReadonlySet<number>) {
 		across,
 		/** How fast each car is moving across the deck */
 		drift,
-		update
+		update,
+		/** How busy the bridge is, from 0, empty, to 1, a jam */
+		busy(level: number) {
+			busy = level;
+		}
 	};
 }

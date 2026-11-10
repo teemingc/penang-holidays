@@ -185,8 +185,12 @@ export function createSmoke(
 	// The margin around the header in the picture, and its pixels to a CSS pixel
 	let framing = { x: 0, y: 0, ratio: 1 };
 	function photograph() {
-		// In their own colours, even while they're hidden
-		for (const words of written) words.style.color = '';
+		// In their own colours, even while they're hidden, and at once: the links turn their
+		// colour over a moment, and read halfway through that they'd be drawn still hidden
+		for (const words of written) {
+			words.style.transition = 'none';
+			words.style.color = '';
+		}
 		drawing.resetTransform();
 		drawing.clearRect(0, 0, picture.width, picture.height);
 		// Drawn to in the window's coordinates, from where the header is now: the page may
@@ -263,7 +267,10 @@ export function createSmoke(
 			drawing.fillText(text, x, y);
 		}
 		pictured.needsUpdate = true;
-		if (smoking) for (const words of written) words.style.color = 'transparent';
+		for (const words of written) {
+			if (smoking) words.style.color = 'transparent';
+			else words.style.transition = '';
+		}
 		// ignore the baseline marks added above
 		rewritten.takeRecords();
 	}
@@ -295,7 +302,10 @@ export function createSmoke(
 		smoking = false;
 		stirred = -Infinity;
 		overlay.style.display = 'none';
-		for (const words of written) words.style.color = '';
+		for (const words of written) {
+			words.style.color = '';
+			words.style.transition = '';
+		}
 	}
 
 	function calm() {

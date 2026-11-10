@@ -12,8 +12,48 @@ import {
 	UNSEEN,
 	deckSlope,
 	deckY,
+	hash,
 	wrap
 } from './layout.js';
+
+// How busy the bridge is through the day, from 0, empty, to 1, jammed, by minutes past
+// midnight: a jam from six in the morning to nine at night, thinning out after, and nothing at
+// all in the small hours
+const BUSY: [number, number][] = [
+	[0, 0.18],
+	[60, 0.06],
+	[120, 0],
+	[300, 0],
+	[330, 0.3],
+	[360, 0.85],
+	[450, 1],
+	[570, 1],
+	[630, 0.88],
+	[960, 0.88],
+	[1050, 1],
+	[1170, 1],
+	[1260, 0.85],
+	[1290, 0.5],
+	[1380, 0.3],
+	[1440, 0.18]
+];
+export function busyAt(minutes: number) {
+	const m = wrap(minutes, 1440);
+	const i = BUSY.findIndex(([at]) => at > m);
+	const [a, x] = BUSY[i - 1]!;
+	const [b, y] = BUSY[i]!;
+	return x + ((y - x) * (m - a)) / (b - a);
+}
+
+// Street racing in the small hours, when there's no one else about: a few cars flat out down
+// the fast lanes, between half past one and half past four, by minutes past midnight
+const RACING: [number, number] = [90, 270];
+// Two side by side, one pulling away, and one the other way; each round about every minute
+const RACERS = [
+	{ lane: 0, speed: 76, colour: '#e8ff3a', from: 700 },
+	{ lane: 1, speed: 71, colour: '#ff6a1a', from: 720 },
+	{ lane: 3, speed: 68, colour: '#f4f4f2', from: 0 }
+];
 
 // Car paint, as on Malaysian roads: mostly white, silver, grey and black, with Myvi reds
 // and blues, maroon and the odd bronze
@@ -42,10 +82,14 @@ const PAINT = [
 export function createTraffic(scene: THREE.Scene, bridge: Bridge) {
 	// The ones that have been picked up, and are out of the traffic
 	const taken = new Set<number>();
+	// The ones off the road at this time of day
+	const parked = new Set<number>();
+	let busy = 1;
+	let racing = false;
 	// Where each car and motorcycle is, for picking them up
 	const spots = new Float32Array((CARS + BIKES) * 3);
 	const dummy = new THREE.Object3D();
-	const jam = createJam(taken);
+	const jam = createJam(taken, parked);
 
 	// The jam: every car an instance of one simple model, a body and a cabin
 	const carGeometry = mergeGeometries([
@@ -82,8 +126,8 @@ export function createTraffic(scene: THREE.Scene, bridge: Bridge) {
 				const yaw = -Math.atan2(jam.drift[n]!, lane.way * Math.max(jam.pace[n]!, 4));
 				const y = deckY(x) + 0.1;
 				const slope = deckSlope(x);
-				const gone = taken.has(n);
-				spots.set([x, y, z], n * 3);
+				const gone = taken.has(n) || parked.has(n);
+				spots.set(parked.has(n) ? [0, UNSEEN, 0] : [x, y, z], n * 3);
 				dummy.position.set(x, y, z);
 				dummy.rotation.set(0, yaw, lane.way > 0 ? slope : -slope);
 				dummy.scale.setScalar(gone ? 0 : 1);
@@ -137,14 +181,16 @@ export function createTraffic(scene: THREE.Scene, bridge: Bridge) {
 			const z = -rider.way * (5.6 + 1.7 * Math.tanh(3 * Math.sin(t * 0.35 + rider.phase)));
 			const y = deckY(x) + 0.1;
 			const slope = deckSlope(x);
-			const gone = taken.has(CARS + i);
+			// Fewer about the quieter the bridge is
+			const off = hash(i, 5) >= busy;
+			const gone = taken.has(CARS + i) || off;
 			// Gone off the bridge, the next one along comes in from the end
-			if (gone) rider.away = true;
+			if (taken.has(CARS + i)) rider.away = true;
 			else if (rider.away) {
 				rider.away = false;
 				rider.along = Math.ceil(rider.along / SPAN) * SPAN + 0.01;
 			}
-			spots.set([x, y, z], (CARS + i) * 3);
+			spots.set(off ? [0, UNSEEN, 0] : [x, y, z], (CARS + i) * 3);
 			dummy.position.set(x, y, z);
 			dummy.rotation.set(0, rider.way > 0 ? 0 : Math.PI, rider.way > 0 ? slope : -slope);
 			dummy.scale.setScalar(gone ? 0 : 1);
@@ -159,6 +205,43 @@ export function createTraffic(scene: THREE.Scene, bridge: Bridge) {
 		heads.needsUpdate = tails.needsUpdate = true;
 	}
 
+	// The racers, each round and round its fast lane, gone for a while between passes
+	const racers = new THREE.InstancedMesh(
+		carGeometry,
+		bridge.lampLit(new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.4 })),
+		RACERS.length
+	);
+	RACERS.forEach((racer, i) => racers.setColorAt(i, new THREE.Color(racer.colour)));
+	scene.add(racers);
+	const racerHeads = bridge.lights(new Array(RACERS.length * 2 * 3).fill(0), 0xfff6e0, 9);
+	const racerTails = bridge.lights(new Array(RACERS.length * 2 * 3).fill(0), 0xff2a1a, 8);
+	function race(t: number) {
+		const heads = racerHeads.geometry.attributes.position as THREE.BufferAttribute;
+		const tails = racerTails.geometry.attributes.position as THREE.BufferAttribute;
+		RACERS.forEach((racer, i) => {
+			const { way, z } = LANES[racer.lane]!;
+			const along = wrap(racer.from + racer.speed * t, SPAN * 1.4);
+			const out = !racing || along > SPAN;
+			const x = way > 0 ? along - TRAFFIC_REACH : TRAFFIC_REACH - along;
+			const y = deckY(x) + 0.1;
+			const slope = deckSlope(x);
+			dummy.position.set(x, y, z);
+			dummy.rotation.set(0, way > 0 ? 0 : Math.PI, way > 0 ? slope : -slope);
+			dummy.scale.setScalar(out ? 0 : 1);
+			dummy.updateMatrix();
+			racers.setMatrixAt(i, dummy.matrix);
+			for (const [k, side] of [-0.75, 0.75].entries()) {
+				const ly = out ? UNSEEN : y;
+				const facing = way < 0 ? heads : tails;
+				const hidden = way < 0 ? tails : heads;
+				facing.setXYZ(i * 2 + k, x - 2.7, ly + 1, z + side);
+				hidden.setXYZ(i * 2 + k, 0, UNSEEN, 0);
+			}
+		});
+		racers.instanceMatrix.needsUpdate = true;
+		heads.needsUpdate = tails.needsUpdate = true;
+	}
+
 	return {
 		taken,
 		/** Where each vehicle is, as x, y, z one after another, by its number */
@@ -168,6 +251,21 @@ export function createTraffic(scene: THREE.Scene, bridge: Bridge) {
 		update(t: number, distance: number) {
 			drive(t);
 			ride(distance, t);
+			race(t);
+		},
+
+		/**
+		 * The traffic for the time of day, `minutes` past midnight: as many cars and motorcycles
+		 * as there are about then, the rest off the road, and the racers out in the small hours
+		 */
+		at(minutes: number) {
+			busy = busyAt(minutes);
+			jam.busy(busy);
+			for (let n = 0; n < CARS; n++) {
+				if (hash(n, 9) >= busy) parked.add(n);
+				else parked.delete(n);
+			}
+			racing = minutes >= RACING[0] && minutes < RACING[1];
 		},
 
 		/** The lights come on as the sky darkens */
@@ -175,6 +273,7 @@ export function createTraffic(scene: THREE.Scene, bridge: Bridge) {
 			headlights.material.opacity = level;
 			taillights.material.opacity = level;
 			bikeLights.material.opacity = bikeTails.material.opacity = level;
+			racerHeads.material.opacity = racerTails.material.opacity = level;
 		},
 
 		/** A vehicle's model and paint, and which way it's going, to take it out of the traffic */

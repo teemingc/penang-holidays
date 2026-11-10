@@ -30,7 +30,9 @@ const heavenly = (map: THREE.Texture, color: number, additive: boolean) =>
  */
 export function createHeavens(scene: THREE.Scene, camera: THREE.Camera, glow: THREE.Texture) {
 	const sunDisc = heavenly(glow, 0xfff1c8, true);
-	sunDisc.scale.setScalar(1500);
+	// Several times as big as it looks in life, half a degree, so it can be seen and taken hold
+	// of, and about the moon's size, as in life
+	sunDisc.scale.setScalar(480);
 	scene.add(sunDisc);
 
 	// The moon, drawn in its phase: the half towards the sun lit, and an ellipse that adds
@@ -43,12 +45,14 @@ export function createHeavens(scene: THREE.Scene, camera: THREE.Camera, glow: TH
 	moonDisc.scale.setScalar(360);
 	const moonGlow = heavenly(glow, 0xcdd8ff, true);
 	moonGlow.scale.setScalar(1200);
+	// As bright as it is, not greyed by the scene's tone mapping, which is for things lit
+	moonDisc.material.toneMapped = moonGlow.material.toneMapped = false;
 	scene.add(moonGlow, moonDisc);
 	function drawMoon(lit: number, waxing: boolean) {
 		const c = moonCanvas.getContext('2d')!;
 		const [m, r] = [64, 56];
 		c.clearRect(0, 0, 128, 128);
-		c.fillStyle = '#f6f2e4';
+		c.fillStyle = '#fffbef';
 		c.beginPath();
 		c.arc(m, m, r, -Math.PI / 2, Math.PI / 2, !waxing);
 		c.fill();
@@ -56,8 +60,11 @@ export function createHeavens(scene: THREE.Scene, camera: THREE.Camera, glow: TH
 		c.beginPath();
 		c.ellipse(m, m, Math.max(0.01, r * Math.abs(2 * lit - 1)), r, 0, 0, Math.PI * 2);
 		c.fill();
+		// Earthshine, the faint glow of the dark part, seen behind a thin crescent; but not at
+		// new moon, when there's nothing to see by
 		c.globalCompositeOperation = 'destination-over';
-		c.fillStyle = 'rgb(200 210 235 / 0.16)';
+		const earthshine = 0.16 * Math.min(1, lit / 0.08) * (1 - lit);
+		c.fillStyle = `rgb(200 210 235 / ${earthshine})`;
 		c.beginPath();
 		c.arc(m, m, r, 0, Math.PI * 2);
 		c.fill();
@@ -93,6 +100,9 @@ export function createHeavens(scene: THREE.Scene, camera: THREE.Camera, glow: TH
 		return points;
 	});
 	let starlight = 0;
+	let moonLit = 1;
+	let drawn = '';
+	let lamps = 0;
 
 	// Penang Hill and its neighbours on the island to the west, hazy in the distance
 	const hills = new THREE.PlaneGeometry(7000, 3500, 70, 35).rotateX(-Math.PI / 2);
@@ -131,12 +141,38 @@ export function createHeavens(scene: THREE.Scene, camera: THREE.Camera, glow: TH
 				.add(camera.position);
 			moonGlow.position.copy(moonDisc.position);
 			moonDisc.visible = moonGlow.visible = moon.elevation > -0.02;
-			drawMoon(moon.lit, moon.waxing);
+			// Drawn again only when its phase has changed enough to see
+			const phase = `${Math.round(moon.lit * 200)}${moon.waxing}`;
+			if (phase !== drawn) drawMoon(moon.lit, moon.waxing);
+			drawn = phase;
+			moonLit = moon.lit;
+			lamps = palette.lamps;
 			// Pale in daylight, bright at night
 			moonDisc.material.opacity = 0.45 + 0.55 * palette.lamps;
-			moonGlow.material.opacity = 0.35 * palette.lamps * moon.lit;
+			moonGlow.material.opacity = 0.6 * palette.lamps * moon.lit ** 0.7;
 
 			starlight = Math.max(0, (palette.lamps - 0.4) / 0.6);
+		},
+
+		/**
+		 * The sun and moon where they're shown on their round of the sky, in the directions
+		 * `sun` and `moon` from the camera, each as visible as `sunShown` and `moonShown`, from 0
+		 * to 1, as they go down behind the horizon
+		 */
+		place(sun: THREE.Vector3, sunShown: number, moon: THREE.Vector3, moonShown: number) {
+			sunDisc.position.copy(sun).multiplyScalar(SKY).add(camera.position);
+			sunDisc.visible = sunShown > 0;
+			sunDisc.material.opacity = sunShown;
+			moonDisc.position
+				.copy(moon)
+				.multiplyScalar(SKY * 0.95)
+				.add(camera.position);
+			moonGlow.position.copy(moonDisc.position);
+			moonDisc.visible = moonGlow.visible = moonShown > 0;
+			// Pale in daylight, bright at night
+			moonDisc.material.opacity = moonShown * (0.45 + 0.55 * lamps);
+			// a full moon lighting up the sky around it
+			moonGlow.material.opacity = 0.6 * moonShown * lamps * moonLit ** 0.7;
 		},
 
 		twinkle() {

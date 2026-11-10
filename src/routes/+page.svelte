@@ -27,13 +27,15 @@
 	import { SOURCE_URL } from '#lib/source.js';
 	import {
 		currentYear,
+		inksAcross,
 		inksFor,
 		now,
 		paletteAt,
 		penangDate,
 		phaseOf,
 		shade,
-		sunAt
+		sunAt,
+		waterOf
 	} from '#lib/sky.js';
 
 	const language = $derived(getLocale());
@@ -136,6 +138,14 @@
 
 	let languages = $state<HTMLElement>();
 
+	// A time of day being previewed, `?time=21:30`, carried over to the other language. Only
+	// read in the browser, as the page is prerendered
+	let preview = $state('');
+	onMount(() => {
+		const time = new URL(location.href).searchParams.get('time');
+		if (time) preview = `?${new URLSearchParams({ time })}`;
+	});
+
 	// A switch of language animates the elements themselves, not a view transition: Safari
 	// lays its snapshots out a little off when the page is scrolled or its bars move, so the
 	// real words jerked into place as they took over at the end. The new words fade in where
@@ -188,6 +198,92 @@
 
 	const rgb = ([r, g, b]: number[]) => `rgb(${Math.round(r!)} ${Math.round(g!)} ${Math.round(b!)})`;
 
+	// Each part of the page in type legible against the stretch of sky behind it, once the
+	// scene has drawn the sky and can say what colour it is at each height; until then, the
+	// page's own type, set for the top of the sky, which is all there is
+	let skyColour: ((y: number) => number[]) | undefined;
+	// Where each part is down the page, measured afresh but for while the sun's dragged, when
+	// nothing moves and the type is set again every frame
+	let parts: { el: HTMLElement; from: number; to: number }[] = [];
+	function measure() {
+		const grid = almanac?.getBoundingClientRect();
+		parts = [...document.querySelectorAll<HTMLElement>('.masthead, .almanac, .request, .foot')].map(
+			(el) => {
+				let { top: from, bottom: to } = el.getBoundingClientRect();
+				// The request is held in view beside the holidays, so it's over any of their sky
+				if (el.classList.contains('request') && grid) {
+					from = Math.min(from, grid.top);
+					to = Math.max(to, grid.bottom);
+				}
+				return { el, from: from + scrollY, to: to + scrollY };
+			}
+		);
+	}
+	// Set once a frame at most, however many times the sky changes in it
+	let inking = 0;
+	const inkBySection = () => {
+		inking ||= requestAnimationFrame(() => {
+			inking = 0;
+			if (!skyColour) return;
+			if (document.documentElement.dataset.scrubbing === undefined || !parts.length) measure();
+			for (const { el, from, to } of parts) {
+				const inks = inksAcross(
+					[from, (from + to) / 2, to].map((y) => skyColour!(y) as [number, number, number])
+				);
+				el.style.setProperty('--ink', rgb(inks.ink));
+				el.style.setProperty('--ink-soft', rgb(inks.soft));
+				el.style.setProperty('--ink-faint', rgb(inks.faint));
+				el.style.setProperty('--accent', rgb(inks.accent));
+				el.style.color = 'var(--ink)';
+			}
+		});
+	};
+
+	// The sky as the scene draws it, src/lib/scene/mist.ts's SKY, in the page's own background
+	// instead, from the same colours: there while the scene loads, under its stills of the bridge,
+	// so the page doesn't change all over once it's drawn, and in its place if it can't be. From
+	// the top of the sky through the band above the horizon to the horizon itself, brightest
+	// there, then the water, on down to the foot of the page, where it thins into the page's own
+	// colour. The horizon is where the scene's camera puts it, a sixth of the way down the
+	// bridge's frame, or with the camera stepped back for a tall one, a little under a third
+	function paintSky(top: number[], palette: ReturnType<typeof paletteAt>, elevation: number) {
+		const frame = document.querySelector('.plate')?.getBoundingClientRect();
+		if (!pane || !frame) return;
+		const mix = (a: number[], b: number[], t: number) => a.map((c, i) => c + (b[i]! - c) * t);
+		const start = pane.getBoundingClientRect().top + scrollY;
+		const end = document.body.getBoundingClientRect().bottom + scrollY;
+		const scene = frame.height;
+		const line = frame.top + scrollY + scene * (frame.width / scene < 1 ? 0.291 : 0.169);
+		const deep = waterOf(palette, elevation);
+		// Fainter after dark, and never white
+		const dark = Math.min(1, Math.max(0, -elevation / ((8 * Math.PI) / 180)));
+		const glowing = 1 - 0.8 * dark;
+		const glow = mix(palette.horizon, [255, 255, 255], 0.4 * glowing ** 2);
+		const at = (colour: number[], y: number, alpha = 1) =>
+			`rgb(${colour.map(Math.round).join(' ')} / ${alpha}) ${Math.round(y)}px`;
+		const above = scene * 0.3;
+		const below = scene * 0.4;
+		document.documentElement.style.backgroundImage = [
+			`linear-gradient(${[
+				at(glow, line - above * 1.6, 0),
+				at(glow, line - above * 0.7, 0.85 * glowing * 0.6),
+				at(glow, line, 0.85 * glowing),
+				at(glow, line + below * 0.7, 0.85 * glowing * 0.6),
+				at(glow, line + below * 1.6, 0)
+			].join(', ')})`,
+			`linear-gradient(${[
+				at(top, start),
+				at(mix(top, palette.mid, 0.5), start + (line - start) * 0.3),
+				at(palette.mid, start + (line - start) * 0.55),
+				at(mix(palette.mid, palette.horizon, 0.5), start + (line - start) * 0.78),
+				at(palette.horizon, line),
+				at(deep, line + scene * 0.9),
+				at(deep, end - 208),
+				at(top, end - 48)
+			].join(', ')})`
+		].join(', ');
+	}
+
 	// The sky follows the time of day in Penang: set before the first paint by src/app.html,
 	// and kept up to date here, blended across twilight just as the scene's is. The sea around
 	// it deepens with the sky, one solid colour at every edge, and the browser's bars with it
@@ -196,8 +292,10 @@
 			const sun = sunAt(now());
 			const root = document.documentElement;
 			const phase = phaseOf(sun);
-			root.dataset.sky = phase;
-			const { top, horizon } = paletteAt(sun);
+			// only when it changes: the smoke over the header draws it again each time it's set
+			if (root.dataset.sky !== phase) root.dataset.sky = phase;
+			const palette = paletteAt(sun);
+			const { top, horizon } = palette;
 			const sky = shade(top, sun);
 			root.style.setProperty('--top', rgb(sky));
 			root.style.setProperty('--horizon', rgb(shade(horizon, sun)));
@@ -209,10 +307,24 @@
 			root.style.setProperty('--ink-soft', rgb(inks.soft));
 			root.style.setProperty('--ink-faint', rgb(inks.faint));
 			root.style.setProperty('--accent', rgb(inks.accent));
+			// Not while the sun's dragged round the sky, when the scene's own sky covers all but
+			// the strip above it, which is left the plain top of the sky, as it keeps up
+			if (root.dataset.scrubbing === undefined) paintSky(sky, palette, sun.elevation);
+			else root.style.backgroundImage = 'none';
+			inkBySection();
 		};
+
 		update();
 		const timer = setInterval(update, 60_000);
-		return () => clearInterval(timer);
+		const observer = new ResizeObserver(update);
+		observer.observe(document.body);
+		// and at once, when the sun's moved round the sky to another time of day
+		addEventListener('skytime', update);
+		return () => {
+			clearInterval(timer);
+			observer.disconnect();
+			removeEventListener('skytime', update);
+		};
 	});
 </script>
 
@@ -269,8 +381,8 @@
 		<p class="languages" bind:this={languages}>
 			<span>{m.languages_in()}</span>{#each locales as locale, i (locale)}{#if i > 0}<span
 						>{m.languages_and()}</span
-					>{/if}<a
-					href={resolve(localizeHref('/', { locale }) as Path)}
+					>{/if}<!-- resolved, with only the time being previewed after it --><!-- eslint-disable-next-line svelte/no-navigation-without-resolve --><a
+					href={resolve(localizeHref('/', { locale }) as Path) + preview}
 					hreflang={TAGS[locale]}
 					aria-current={locale === language ? 'page' : undefined}
 					data-sveltekit-reset="false"
@@ -292,6 +404,10 @@
 				header={masthead}
 				{pane}
 				onready={() => (ready = true)}
+				onsky={(colourAt) => {
+					skyColour = colourAt;
+					inkBySection();
+				}}
 			/>
 		{/await}
 		<!-- A still of the scene at each time of day, shown until three.js has loaded and drawn it -->
@@ -413,6 +529,12 @@
 		transition: background-color 4s ease;
 	}
 
+	/* While the sun's dragged round the sky, the page's colours keep up with it */
+	:global(:root[data-scrubbing]),
+	:global(:root[data-scrubbing] body) {
+		transition: none;
+	}
+
 	/* Dark type on a bright sky */
 	:global(:root[data-ink='dark']) {
 		color-scheme: light;
@@ -430,22 +552,6 @@
 		/* The ground around everything, widened past a notch or the corners of a phone on its
 		   side, which viewport-fit=cover in src/app.html lets the ground itself reach under */
 		--gutter: clamp(1.25rem, 4vw, 3.5rem);
-		/* Eased out to nothing: fully there in the middle, then thinning along a cosine, so
-		   there's no line where it starts to go and none where it's gone */
-		--ellipse: radial-gradient(
-			50% 50% at 50% 50%,
-			rgb(0 0 0 / 1) 28%,
-			rgb(0 0 0 / 0.976) 35.2%,
-			rgb(0 0 0 / 0.905) 42.4%,
-			rgb(0 0 0 / 0.794) 49.6%,
-			rgb(0 0 0 / 0.655) 56.8%,
-			rgb(0 0 0 / 0.5) 64%,
-			rgb(0 0 0 / 0.345) 71.2%,
-			rgb(0 0 0 / 0.206) 78.4%,
-			rgb(0 0 0 / 0.095) 85.6%,
-			rgb(0 0 0 / 0.024) 92.8%,
-			rgb(0 0 0 / 0) 100%
-		);
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
 		grid-template-areas:
@@ -671,13 +777,18 @@
 	}
 
 	/* Framed as the scene is: its camera's field of view is set by the height, so the still is
-	   fitted to the height and cropped at the sides, and eased out to nothing all round */
+	   fitted to the height and cropped at the sides. It's the bridge and the sea alone, on the
+	   page's own sky, eased out as they are: the sea across its lower part, and both at the
+	   sides, where the page's margins come */
 	.still {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
 		background: var(--night) center / auto 100% no-repeat;
-		mask-image: var(--ellipse);
+		mask-image:
+			linear-gradient(to right, transparent, #000 6%, #000 94%, transparent),
+			linear-gradient(to top, transparent, #000 45%);
+		mask-composite: intersect;
 		transition: opacity 0.6s ease-out;
 	}
 
@@ -811,20 +922,26 @@
 
 	li {
 		display: grid;
-		grid-template-columns: 2.75rem minmax(0, 1fr);
+		grid-template-columns: 3.375rem minmax(0, 1fr);
 		grid-template-areas: 'day name' 'day when';
 		column-gap: 0.75rem;
-		padding: 0.5rem 0.5rem 0.5rem 0;
+		padding: 0.5rem 0;
 		border-radius: var(--radius);
 		line-height: 1.3;
 	}
 
+	/* Set as a drop cap: its figures stand from the top of the name's capitals to the foot of
+	   the line below it. Newsreader's figures are 0.6955em tall, so at 2.75rem they're as tall
+	   as those two lines. Its line box is kept within them, so the row isn't any taller, and it's
+	   moved down, not pushed, by what puts its figures on them */
 	li time {
 		grid-area: day;
+		align-self: start;
 		justify-self: end;
-		font-size: 2.25rem;
+		font-size: 2.75rem;
 		font-weight: 600;
-		line-height: 1;
+		line-height: 0.8;
+		translate: 0 0.12em;
 	}
 
 	.name {
@@ -898,16 +1015,11 @@
 		text-decoration-thickness: 2px;
 	}
 
-	/* The next holiday, picked out in reverse */
-	/* Within the column, flush with the month's rule above it */
-	li.next {
-		padding-left: 0.5rem;
-		background: #f6cf4f;
-		color: #0b2746;
-	}
-
+	/* The next holiday, picked out by its type alone: its day and how long till it, in the
+	   accent, which is set legible against the sky at every hour */
+	li.next time,
 	li.next .when {
-		color: inherit;
+		color: var(--accent);
 	}
 
 	.note {
