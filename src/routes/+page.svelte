@@ -901,6 +901,7 @@
 	/* The next holiday, picked out in reverse */
 	/* Within the column, flush with the month's rule above it */
 	li.next {
+		padding-left: 0.5rem;
 		background: #f6cf4f;
 		color: #0b2746;
 	}
