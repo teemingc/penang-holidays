@@ -128,7 +128,10 @@ pnpm dev       # local dev server
 pnpm test
 pnpm build
 pnpm preview   # run the production build in the Workers runtime
+pnpm og        # draw the image shown when the site is shared, with Chrome
 ```
+
+The shared image, [`src/lib/assets/og.png`](src/lib/assets/og.png), is a picture of [`scripts/og.html`](scripts/og.html). Run `pnpm og` after changing that page; it needs Chrome, and `CHROME` set to its path if it isn't found.
 
 ## Deploying
 
