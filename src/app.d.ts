@@ -8,6 +8,19 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	interface Window {
+		/** Paints the sky down the page's background: see src/app.html */
+		paintSky: (
+			top: number[],
+			mid: number[],
+			horizon: number[],
+			deep: number[],
+			elevation: number
+		) => void;
+		/** Keeps the sky painted until the page takes over: see src/app.html */
+		skyWatch: ResizeObserver;
+	}
 }
 
 declare module 'svelte/elements' {

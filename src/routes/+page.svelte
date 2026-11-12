@@ -291,47 +291,10 @@
 
 	// The sky as the scene draws it, src/lib/scene/mist.ts's SKY, in the page's own background
 	// instead, from the same colours: there while the scene loads, under its stills of the bridge,
-	// so the page doesn't change all over once it's drawn, and in its place if it can't be. From
-	// the top of the sky through the band above the horizon to the horizon itself, brightest
-	// there, then the water, on down to the foot of the page, where it thins into the page's own
-	// colour. The horizon is where the scene's camera puts it, a sixth of the way down the
-	// bridge's frame, or with the camera stepped back for a tall one, a little under a third
+	// so the page doesn't change all over once it's drawn, and in its place if it can't be.
+	// src/app.html's paintSky lays it out, as it has since before the first frame
 	function paintSky(top: number[], palette: ReturnType<typeof paletteAt>, elevation: number) {
-		const frame = document.querySelector('.plate')?.getBoundingClientRect();
-		if (!pane || !frame) return;
-		const mix = (a: number[], b: number[], t: number) => a.map((c, i) => c + (b[i]! - c) * t);
-		const start = pane.getBoundingClientRect().top + scrollY;
-		const end = document.body.getBoundingClientRect().bottom + scrollY;
-		const scene = frame.height;
-		const line = frame.top + scrollY + scene * (frame.width / scene < 1 ? 0.291 : 0.169);
-		const deep = waterOf(palette, elevation);
-		// Fainter after dark, and never white
-		const dark = Math.min(1, Math.max(0, -elevation / ((8 * Math.PI) / 180)));
-		const glowing = 1 - 0.8 * dark;
-		const glow = mix(palette.horizon, [255, 255, 255], 0.4 * glowing ** 2);
-		const at = (colour: number[], y: number, alpha = 1) =>
-			`rgb(${colour.map(Math.round).join(' ')} / ${alpha}) ${Math.round(y)}px`;
-		const above = scene * 0.3;
-		const below = scene * 0.4;
-		document.documentElement.style.backgroundImage = [
-			`linear-gradient(${[
-				at(glow, line - above * 1.6, 0),
-				at(glow, line - above * 0.7, 0.85 * glowing * 0.6),
-				at(glow, line, 0.85 * glowing),
-				at(glow, line + below * 0.7, 0.85 * glowing * 0.6),
-				at(glow, line + below * 1.6, 0)
-			].join(', ')})`,
-			`linear-gradient(${[
-				at(top, start),
-				at(mix(top, palette.mid, 0.5), start + (line - start) * 0.3),
-				at(palette.mid, start + (line - start) * 0.55),
-				at(mix(palette.mid, palette.horizon, 0.5), start + (line - start) * 0.78),
-				at(palette.horizon, line),
-				at(deep, line + scene * 0.9),
-				at(deep, end - 208),
-				at(top, end - 48)
-			].join(', ')})`
-		].join(', ');
+		window.paintSky(top, palette.mid, palette.horizon, waterOf(palette, elevation), elevation);
 	}
 
 	// Kept up with the sky when the sun's moved round it; set up once the page is
@@ -367,6 +330,8 @@
 			inkBySection();
 		};
 
+		// src/app.html has painted the sky until now
+		window.skyWatch.disconnect();
 		update();
 		const timer = setInterval(update, 60_000);
 		const observer = new ResizeObserver(update);
