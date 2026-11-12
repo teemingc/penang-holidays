@@ -7,9 +7,13 @@ const LONGITUDE = 100.33;
 
 const radians = (degrees: number) => (degrees * Math.PI) / 180;
 
-/** The date in Penang at a given moment, e.g. `2026-02-17` */
+/**
+ * The date in Penang at a given moment, e.g. `2026-02-17`. Penang keeps UTC+8 all year, so
+ * it's worked out from that rather than formatted for its time zone, which costs a browser
+ * tens of milliseconds the first time, before the page's first paint: see src/lib/boot.ts
+ */
 export const penangDate = (date: Date) =>
-	date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' });
+	new Date(date.getTime() + 8 * 3_600_000).toISOString().slice(0, 10);
 
 // A time of day picked by moving the sun across the sky, or 'now' once it's been put back,
 // which overrides a `?time` in the address too; until either, null
