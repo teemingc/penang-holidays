@@ -20,23 +20,13 @@
 	import night from '#lib/assets/bridge/night.webp';
 	// The page at dusk, for when it's shared; drawn by scripts/og.html
 	import og from '#lib/assets/og.png';
+	import { paintSky, tint } from '#lib/backdrop.js';
 	import { getPage } from '#lib/holidays.remote.js';
 	import { TAGS } from '#lib/languages.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, locales, localizeHref } from '#lib/paraglide/runtime.js';
 	import { SCHOOL_SOURCE_URL, SOURCE_URL } from '#lib/source.js';
-	import {
-		currentYear,
-		inksAcross,
-		inksFor,
-		now,
-		paletteAt,
-		penangDate,
-		phaseOf,
-		shade,
-		sunAt,
-		waterOf
-	} from '#lib/sky.js';
+	import { currentYear, inksAcross, now, penangDate, sunAt } from '#lib/sky.js';
 
 	const language = $derived(getLocale());
 
@@ -289,48 +279,25 @@
 		});
 	};
 
-	// The sky as the scene draws it, src/lib/scene/mist.ts's SKY, in the page's own background
-	// instead, from the same colours: there while the scene loads, under its stills of the bridge,
-	// so the page doesn't change all over once it's drawn, and in its place if it can't be.
-	// src/app.html's paintSky lays it out, as it has since before the first frame
-	function paintSky(top: number[], palette: ReturnType<typeof paletteAt>, elevation: number) {
-		window.paintSky(top, palette.mid, palette.horizon, waterOf(palette, elevation), elevation);
-	}
-
 	// Kept up with the sky when the sun's moved round it; set up once the page is
 	let onSkytime = () => {};
 
-	// The sky follows the time of day in Penang: set before the first paint by src/app.html,
+	// The sky follows the time of day in Penang: set before the first paint by src/lib/boot.ts,
 	// and kept up to date here, blended across twilight just as the scene's is. The sea around
 	// it deepens with the sky, one solid colour at every edge, and the browser's bars with it
 	onMount(() => {
 		const update = () => {
 			const sun = sunAt(now());
 			const root = document.documentElement;
-			const phase = phaseOf(sun);
-			// only when it changes: the smoke over the header draws it again each time it's set
-			if (root.dataset.sky !== phase) root.dataset.sky = phase;
-			const palette = paletteAt(sun);
-			const { top, horizon } = palette;
-			const sky = shade(top, sun);
-			root.style.setProperty('--top', rgb(sky));
-			root.style.setProperty('--horizon', rgb(shade(horizon, sun)));
-			document.querySelector('meta[name="theme-color"]')?.setAttribute('content', rgb(sky));
-			// The type, light or dark, legible against the sky; keep in sync with src/app.html
-			const inks = inksFor(sky);
-			root.dataset.ink = inks.dark ? 'dark' : 'light';
-			root.style.setProperty('--ink', rgb(inks.ink));
-			root.style.setProperty('--ink-soft', rgb(inks.soft));
-			root.style.setProperty('--ink-faint', rgb(inks.faint));
-			root.style.setProperty('--accent', rgb(inks.accent));
+			const { top, palette } = tint(sun);
 			// Not while the sun's dragged round the sky, when the scene's own sky covers all but
 			// the strip above it, which is left the plain top of the sky, as it keeps up
-			if (root.dataset.scrubbing === undefined) paintSky(sky, palette, sun.elevation);
+			if (root.dataset.scrubbing === undefined) paintSky(top, palette, sun.elevation);
 			else root.style.backgroundImage = 'none';
 			inkBySection();
 		};
 
-		// src/app.html has painted the sky until now
+		// src/lib/boot.ts has painted the sky until now
 		window.skyWatch.disconnect();
 		update();
 		const timer = setInterval(update, 60_000);

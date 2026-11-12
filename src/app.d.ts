@@ -10,15 +10,7 @@ declare global {
 	}
 
 	interface Window {
-		/** Paints the sky down the page's background: see src/app.html */
-		paintSky: (
-			top: number[],
-			mid: number[],
-			horizon: number[],
-			deep: number[],
-			elevation: number
-		) => void;
-		/** Keeps the sky painted until the page takes over: see src/app.html */
+		/** Keeps the sky painted until the page takes over: see src/lib/boot.ts */
 		skyWatch: ResizeObserver;
 	}
 }
